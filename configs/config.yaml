@@ -1,0 +1,35 @@
+server:
+  port: "8080"
+  mode: "release"
+  web_dist_dir: ""
+
+database:
+  dsn: ""
+  url: ""
+  max_open_conns: 0
+  max_idle_conns: 0
+  conn_max_lifetime_sec: 0
+  conn_max_idle_time_sec: 0
+  auto_migrate: true
+  reset: false
+
+redis:
+  addr: "127.0.0.1:6379"
+  password: ""
+  db: 0
+
+asynq:
+  redis_addr: ""
+  concurrency: 10
+
+python:
+  bin: "python"
+  script: "../scripts/python/account_manager.py"
+  timeout_seconds: 60
+
+logging:
+  file: "logs/octomanger.log"
+  level: "info"
+
+paths:
+  octo_module_dir: "../scripts/python/modules"

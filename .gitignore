@@ -1,0 +1,129 @@
+# ============================================================
+# Go
+# ============================================================
+
+*_test.go
+
+# 编译产物
+bin/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 测试编译产物（注意：*_test.go 源文件不应忽略）
+*.test
+*.out
+
+# 覆盖率 / 性能分析
+coverage.out
+*.coverprofile
+*.prof
+*.pprof
+
+# 依赖
+vendor/
+
+# 构建缓存
+backend/.gocache
+.gocache/
+
+# ============================================================
+# Python
+# ============================================================
+
+# 字节码缓存
+__pycache__/
+*.py[cod]
+*.pyo
+*$py.class
+
+# 虚拟环境（各模块独立 .venv，不提交）
+.venv/
+venv/
+env/
+ENV/
+
+# 打包 / 分发产物
+*.egg-info/
+*.egg
+dist/
+build/
+pip-log.txt
+pip-wheel-metadata/
+
+# ============================================================
+# Node / Bun（前端）
+# ============================================================
+
+*.test.js
+# 依赖
+node_modules/
+web/node_modules/
+
+# 构建产物
+web/dist/
+
+# TypeScript 编译中间产物
+web/*.tsbuildinfo
+web/vite.config.js
+web/vite.config.d.ts
+web/tailwind.config.d.ts
+
+# ============================================================
+# 配置 / 环境变量
+# ============================================================
+
+# 本地环境变量（保留 .env.example 模板）
+.env
+.env.*
+!.env.example
+
+# 本地配置覆盖（不覆盖默认 configs/config.yaml）
+configs/config.local.yaml
+configs/config.local.yml
+
+# Docker Compose 本地覆盖
+docker-compose.override.yml
+
+# ============================================================
+# 日志 / 临时文件
+# ============================================================
+
+*.log
+*.log.*
+logs/
+.tmp/
+tmp/
+
+# ============================================================
+# IDE / 编辑器
+# ============================================================
+
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+CLAUDE.md
+
+# ============================================================
+# 操作系统
+# ============================================================
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.directory

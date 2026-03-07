@@ -1,0 +1,67 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: octomanger-postgres
+    environment:
+      POSTGRES_DB: octomanger
+      POSTGRES_USER: octo
+      POSTGRES_PASSWORD: octo
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U octo -d octomanger"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
+  redis:
+    image: redis:7
+    container_name: octomanger-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: octomanger-app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      SERVER_PORT: "8080"
+      SERVER_WEB_DIST_DIR: "/app/web-dist"
+      LOGGING_FILE: "/app/logs/octomanger.log"
+      LOGGING_LEVEL: "info"
+      REDIS_ADDR: "redis:6379"
+      ASYNQ_CONCURRENCY: "10"
+      PYTHON_BIN: "python3"
+      PYTHON_SCRIPT: "/app/scripts/python/account_manager.py"
+      PATHS_OCTO_MODULE_DIR: "/app/scripts/python/modules"
+      DATABASE_URL: "postgres://octo:octo@postgres:5432/octomanger?sslmode=disable"
+      DATABASE_AUTO_MIGRATE: "true"
+      DATABASE_RESET: "false"
+    volumes:
+      - ./logs:/app/logs
+      - octo_modules:/app/scripts/python/modules
+      - pip_cache:/root/.cache/pip
+
+volumes:
+  pgdata:
+  redisdata:
+  octo_modules:
+  pip_cache:

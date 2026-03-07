@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs grep -l \"middleware\\\\|auth\")",
+      "Bash(xargs grep -l \"public\\\\|unauthenticated\\\\|anonymous\")",
+      "Bash(grep -n \"writeUsecaseError\\\\|StatusUnauthorized\\\\|CodeUnauthorized\\\\|CodeNotFound\\\\|StatusNotFound\" d:/Projects/OctoManger/backend/internal/handlers/*.go)"
+    ]
+  }
+}
