@@ -158,7 +158,7 @@ export function AccountTypeForm({
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Only generic types are scaffolded and exposed in Octo Modules.
+                  仅 generic 类型会自动创建 Octo 模块脚本入口。
                 </p>
               </div>
               <div className="space-y-2">

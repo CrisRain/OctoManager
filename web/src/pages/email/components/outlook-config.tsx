@@ -98,7 +98,7 @@ export function OutlookConfigPanel({ config, configLoading, onSave }: OutlookCon
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Outlook OAuth Config</CardTitle>
+        <CardTitle>Outlook OAuth 配置</CardTitle>
         <CardDescription>
           手动添加和批量导入共用的 OAuth 配置。批量导入仅使用 <code>client_id</code>，<code>client_secret</code> 仅用于手动 OAuth 流程。
         </CardDescription>
@@ -122,9 +122,9 @@ export function OutlookConfigPanel({ config, configLoading, onSave }: OutlookCon
                 type="password"
                 value={draft.clientSecret}
                 onChange={(e) => setDraft((prev) => ({ ...prev, clientSecret: e.target.value }))}
-                placeholder="Optional for public client"
+                placeholder="公共客户端可不填"
               />
-              <p className="text-xs text-muted-foreground">Used by manual OAuth flows only. Batch Import does not send it.</p>
+              <p className="text-xs text-muted-foreground">仅用于手动 OAuth 流程，批量导入不会发送此项。</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="cfg-tenant">Tenant</Label>

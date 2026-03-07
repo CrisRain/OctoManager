@@ -9,7 +9,7 @@ type CreateApiKeyRequest struct {
 }
 
 type SetApiKeyEnabledRequest struct {
-    Enabled bool `json:"enabled" binding:"required"`
+    Enabled *bool `json:"enabled" binding:"required"`
 }
 
 type ApiKeyResponse struct {

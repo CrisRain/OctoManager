@@ -228,7 +228,7 @@ export function JobCreate({ open, onOpenChange, onSuccess }: JobCreateProps) {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-xs text-muted-foreground">Only generic account types are available here.</p>
+            <p className="text-xs text-muted-foreground">此处仅支持 generic 类型账号。</p>
           </div>
 
           <div className="space-y-2">

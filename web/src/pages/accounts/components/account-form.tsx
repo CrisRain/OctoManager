@@ -199,7 +199,7 @@ export function AccountForm({
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">Only generic account types can be managed here.</p>
+                <p className="text-xs text-muted-foreground">此处仅支持 generic 类型账号。</p>
               </div>
 
               <div className="space-y-2">
@@ -243,7 +243,7 @@ export function AccountForm({
                             onValueChange={(v) => updateSpecValue(key, v)}
                           >
                             <SelectTrigger>
-                              <SelectValue placeholder="Select value" />
+                              <SelectValue placeholder="请选择" />
                             </SelectTrigger>
                             <SelectContent>
                               {definition.enum.map((option) => (

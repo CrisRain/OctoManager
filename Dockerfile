@@ -17,8 +17,7 @@ RUN go mod download
 
 COPY backend/. .
 RUN go mod tidy
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/api ./cmd/api
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/worker ./cmd/worker
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /out/octomanger ./cmd/octomanger
 
 FROM debian:bookworm-slim
 
@@ -36,12 +35,11 @@ RUN apt-get update \
 WORKDIR /app
 
 COPY --from=web-builder /src/web/dist /app/web-dist
-COPY --from=backend-builder /out/api /app/api
-COPY --from=backend-builder /out/worker /app/worker
+COPY --from=backend-builder /out/octomanger /app/octomanger
 COPY scripts/python /app/scripts/python
 COPY docker/start-all-in-one.sh /app/start.sh
 
-RUN chmod +x /app/api /app/worker /app/start.sh
+RUN chmod +x /app/octomanger /app/start.sh
 
 EXPOSE 8080
 

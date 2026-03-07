@@ -47,7 +47,7 @@ function RouteFallback() {
     <div className="flex min-h-[240px] items-center justify-center rounded-xl border border-dashed bg-card/60">
       <div className="text-center">
         <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-foreground" />
-        <p className="mt-3 text-sm text-muted-foreground">Loading page...</p>
+        <p className="mt-3 text-sm text-muted-foreground">页面加载中...</p>
       </div>
     </div>
   );
@@ -77,11 +77,29 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>;
 }
 
+// 仅在系统尚未初始化时允许访问，否则跳走
+function RequireSetup({ children }: { children: ReactNode }) {
+  const authState = useAuthCheck();
+
+  if (authState === "checking") {
+    return (
+      <div className="flex min-h-screen items-center justify-center">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-muted-foreground/20 border-t-foreground" />
+      </div>
+    );
+  }
+  if (authState === "needs-setup") {
+    return <>{children}</>;
+  }
+  // 已初始化：已登录跳 dashboard，未登录跳 auth
+  return <Navigate to={authState === "ok" ? "/dashboard" : "/auth"} replace />;
+}
+
 export function App() {
   return (
     <Routes>
       <Route path="/oauth/callback" element={withRouteSuspense(<OAuthCallbackPage />)} />
-      <Route path="/setup" element={withRouteSuspense(<SetupPage />)} />
+      <Route path="/setup" element={<RequireSetup>{withRouteSuspense(<SetupPage />)}</RequireSetup>} />
       <Route path="/auth" element={withRouteSuspense(<AuthPage />)} />
       <Route
         element={

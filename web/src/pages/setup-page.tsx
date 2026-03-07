@@ -60,7 +60,7 @@ export function SetupPage() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>OctoManger Setup</CardTitle>
+          <CardTitle>OctoManger 初始化</CardTitle>
           <CardDescription>
             {step === "migrate" && "运行数据库迁移以初始化 Schema。"}
             {step === "create-key" && "创建第一个 Admin API Key。"}

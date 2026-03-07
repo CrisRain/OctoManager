@@ -113,18 +113,18 @@ function waitForOAuthCallback(popup: Window, expectedState: string): Promise<str
       }
 
       if ((payload.state ?? "") !== expectedState) {
-        finish(() => reject(new Error("OAuth state mismatch")));
+        finish(() => reject(new Error("OAuth state 不匹配")));
         return;
       }
 
       if (payload.error) {
         const detail = payload.error_description?.trim() || payload.error;
-        finish(() => reject(new Error(`OAuth failed: ${detail}`)));
+        finish(() => reject(new Error(`OAuth 失败：${detail}`)));
         return;
       }
 
       if (!payload.code?.trim()) {
-        finish(() => reject(new Error("OAuth callback missing code")));
+        finish(() => reject(new Error("OAuth 回调缺少 code")));
         return;
       }
 
@@ -132,14 +132,14 @@ function waitForOAuthCallback(popup: Window, expectedState: string): Promise<str
     };
 
     const timeoutID = window.setTimeout(() => {
-      finish(() => reject(new Error("OAuth callback timed out")));
+      finish(() => reject(new Error("OAuth 回调超时")));
     }, CALLBACK_TIMEOUT_MS);
 
     const closeCheckID = window.setInterval(() => {
       if (!popup.closed) {
         return;
       }
-      finish(() => reject(new Error("OAuth window closed before callback")));
+      finish(() => reject(new Error("OAuth 窗口在回调前已关闭")));
     }, 500);
 
     window.addEventListener("message", handleMessage);
@@ -162,7 +162,7 @@ function openOAuthPopup(url: string): Window {
 
   const popup = window.open(url, "outlook-oauth", features);
   if (!popup) {
-    throw new Error("Popup was blocked. Please allow popups and try again.");
+    throw new Error("弹窗被拦截，请允许弹出窗口后重试。");
   }
   popup.focus();
   return popup;
@@ -198,7 +198,7 @@ export function EmailAccountCreate({ config, onSuccess }: EmailAccountCreateProp
       const parsed = parseJSONObjectText(graphConfigDraft, "graph_config");
       setGraphConfigText(JSON.stringify(parsed, null, 2));
       setGraphConfigDialogOpen(false);
-      toast.success("graph_config overrides updated");
+      toast.success("graph_config 覆写已更新");
     } catch (error) {
       toast.error(extractErrorMessage(error));
     }
@@ -217,19 +217,19 @@ export function EmailAccountCreate({ config, onSuccess }: EmailAccountCreateProp
     const graphBaseURL = config.graphBaseURL.trim() || "https://graph.microsoft.com/v1.0";
 
     if (!address || !address.includes("@")) {
-      toast.error("Please enter a valid email address.");
+      toast.error("请输入有效的邮箱地址。");
       return;
     }
     if (!clientId) {
-      toast.error("Client ID is required. Please configure it in the Config tab.");
+      toast.error("Client ID 为必填项，请在配置标签页中填写。");
       return;
     }
     if (!redirectURI) {
-      toast.error("Redirect URI is required. Please configure it in the Config tab.");
+      toast.error("Redirect URI 为必填项，请在配置标签页中填写。");
       return;
     }
     if (scopes.length === 0) {
-      toast.error("Please configure at least one scope in the Config tab.");
+      toast.error("请在配置标签页中配置至少一个 scope。");
       return;
     }
 
@@ -237,11 +237,11 @@ export function EmailAccountCreate({ config, onSuccess }: EmailAccountCreateProp
     try {
       redirectOrigin = new URL(redirectURI).origin;
     } catch {
-      toast.error("Redirect URI is invalid.");
+      toast.error("Redirect URI 格式无效。");
       return;
     }
     if (redirectOrigin !== window.location.origin) {
-      toast.error("Redirect URI must use the same origin as this page for automatic callback handling.");
+      toast.error("Redirect URI 必须与当前页面同源，以支持自动回调处理。");
       return;
     }
 
@@ -288,7 +288,7 @@ export function EmailAccountCreate({ config, onSuccess }: EmailAccountCreateProp
 
       const refreshToken = token.refresh_token?.trim();
       if (!refreshToken) {
-        throw new Error("Token exchange succeeded but refresh_token is empty. Make sure offline_access scope is enabled.");
+        throw new Error("Token 换取成功，但 refresh_token 为空，请确认已开启 offline_access scope。");
       }
 
       const remoteScopes = splitScopes(token.scope ?? "");
@@ -319,7 +319,7 @@ export function EmailAccountCreate({ config, onSuccess }: EmailAccountCreateProp
         },
       });
 
-      toast.success(`Outlook account ${address} added`);
+      toast.success(`Outlook 账号 ${address} 已添加`);
       setForm((prev) => ({
         ...prev,
         address: "",
@@ -340,19 +340,19 @@ export function EmailAccountCreate({ config, onSuccess }: EmailAccountCreateProp
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Manual Add Outlook Account</CardTitle>
+          <CardTitle>手动添加 Outlook 账号</CardTitle>
           <CardDescription>
-            Click &quot;Add Account&quot; to open Outlook OAuth in a popup. After callback to
+            点击「添加账号」后将弹出 Outlook OAuth 授权窗口，回调到
             {" "}
             <code className="rounded bg-muted px-1 py-0.5 text-xs font-mono">/oauth/callback</code>
-            , account creation will run automatically.
+            {" "}后自动完成账号创建。
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="email-address">Email Address</Label>
+                <Label htmlFor="email-address">邮箱地址</Label>
                 <Input
                   id="email-address"
                   value={form.address}
@@ -362,7 +362,7 @@ export function EmailAccountCreate({ config, onSuccess }: EmailAccountCreateProp
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="email-status">Status</Label>
+                <Label htmlFor="email-status">状态</Label>
                 <Select
                   value={form.status}
                   onValueChange={(value) => setForm((prev) => ({ ...prev, status: value }))}
@@ -371,25 +371,25 @@ export function EmailAccountCreate({ config, onSuccess }: EmailAccountCreateProp
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">Pending (0)</SelectItem>
-                    <SelectItem value="1">Verified (1)</SelectItem>
+                    <SelectItem value="0">待验证 (0)</SelectItem>
+                    <SelectItem value="1">已验证 (1)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="oauth-login-hint">Login Hint</Label>
+                <Label htmlFor="oauth-login-hint">登录提示</Label>
                 <Input
                   id="oauth-login-hint"
                   value={form.loginHint}
                   onChange={(e) => setForm((prev) => ({ ...prev, loginHint: e.target.value }))}
-                  placeholder="Optional, for example user@outlook.com"
+                  placeholder="可选，如 user@outlook.com"
                 />
               </div>
             </div>
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-xs text-muted-foreground">
-                graph_config overrides: {graphOverrideCount} key(s)
+                graph_config 覆写：{graphOverrideCount} 项
               </div>
               <div className="flex gap-2">
                 <Button
@@ -399,11 +399,11 @@ export function EmailAccountCreate({ config, onSuccess }: EmailAccountCreateProp
                   disabled={loading}
                 >
                   <Settings2 className="mr-2 h-4 w-4" />
-                  Edit graph_config
+                  编辑 graph_config
                 </Button>
                 <Button type="submit" disabled={loading}>
                   {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                  Add Account
+                  添加账号
                 </Button>
               </div>
             </div>
@@ -414,9 +414,9 @@ export function EmailAccountCreate({ config, onSuccess }: EmailAccountCreateProp
       <Dialog open={graphConfigDialogOpen} onOpenChange={setGraphConfigDialogOpen}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
-            <DialogTitle>Edit graph_config overrides</DialogTitle>
+            <DialogTitle>编辑 graph_config 覆写</DialogTitle>
             <DialogDescription>
-              Advanced overrides merged after OAuth tokens are exchanged. Use JSON object format.
+              OAuth 令牌换取后合并的高级覆写项，使用 JSON 对象格式。
             </DialogDescription>
           </DialogHeader>
           <Textarea
@@ -430,10 +430,10 @@ export function EmailAccountCreate({ config, onSuccess }: EmailAccountCreateProp
               variant="outline"
               onClick={() => setGraphConfigDialogOpen(false)}
             >
-              Cancel
+              取消
             </Button>
             <Button type="button" onClick={saveGraphConfigEditor}>
-              Save
+              保存
             </Button>
           </DialogFooter>
         </DialogContent>

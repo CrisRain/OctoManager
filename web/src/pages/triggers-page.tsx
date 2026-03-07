@@ -200,7 +200,7 @@ export function TriggersPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Triggers"
+        title="触发器"
         description="把外部 Webhook 请求接进 generic 模块动作，支持同步和异步两种触发方式。"
       >
         <Button onClick={openCreate}>

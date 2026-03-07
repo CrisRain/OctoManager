@@ -155,17 +155,17 @@ export function EmailAccountsOutlookPage() {
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Email Accounts / Outlook"
-        description="Outlook account list, manual add (OAuth popup callback), import, and batch register."
+        title="邮箱账号 / Outlook"
+        description="Outlook 账号列表、手动添加（OAuth 弹窗回调）、批量导入与批量注册。"
       />
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
         <TabsList className="w-full justify-start">
-          <TabsTrigger value="list">Account List</TabsTrigger>
-          <TabsTrigger value="create">Manual Add</TabsTrigger>
-          <TabsTrigger value="import">Batch Import</TabsTrigger>
-          <TabsTrigger value="batch">Batch Register</TabsTrigger>
-          <TabsTrigger value="config">OAuth Config</TabsTrigger>
+          <TabsTrigger value="list">账号列表</TabsTrigger>
+          <TabsTrigger value="create">手动添加</TabsTrigger>
+          <TabsTrigger value="import">批量导入</TabsTrigger>
+          <TabsTrigger value="batch">批量注册</TabsTrigger>
+          <TabsTrigger value="config">OAuth 配置</TabsTrigger>
         </TabsList>
 
         <TabsContent value="list" className="space-y-4">

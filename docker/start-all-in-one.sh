@@ -72,15 +72,8 @@ else
   echo "DATABASE_DSN/DATABASE_URL is empty; PostgreSQL checks are skipped."
 fi
 
-/app/api &
-api_pid=$!
-DATABASE_AUTO_MIGRATE=false /app/worker &
-worker_pid=$!
+# SERVICES controls which components to run (default: all).
+# Example: SERVICES=api,worker  — omit scheduler and daemon
+export SERVICES="${SERVICES:-all}"
 
-trap 'kill -TERM "${api_pid}" "${worker_pid}" 2>/dev/null || true; wait || true' SIGINT SIGTERM
-
-wait -n "${api_pid}" "${worker_pid}"
-status=$?
-kill -TERM "${api_pid}" "${worker_pid}" 2>/dev/null || true
-wait || true
-exit "${status}"
+exec /app/octomanger -services="${SERVICES}"

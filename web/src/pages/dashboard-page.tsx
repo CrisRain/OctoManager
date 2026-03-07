@@ -47,7 +47,7 @@ export function DashboardPage() {
         api.listAccountTypes(),
         api.listAccounts(),
         api.listEmailAccounts(),
-        api.listJobs(),
+        api.listJobs({ limit: 10 }),
         api.listOctoModules()
       ]);
 
@@ -62,7 +62,7 @@ export function DashboardPage() {
         moduleCount: modules.length,
         health: health.status,
         healthTime: health.time,
-        recentJobs: sortedJobs.slice(0, 6)
+        recentJobs: sortedJobs.slice(0, 10)
       });
     } catch (error) {
       toast.error(extractErrorMessage(error));
@@ -116,7 +116,7 @@ export function DashboardPage() {
       <Card>
         <CardHeader>
           <CardTitle>最近任务</CardTitle>
-          <CardDescription>按更新时间倒序展示最近任务，直接定位失败或积压。</CardDescription>
+          <CardDescription>按更新时间倒序展示最近 10 条任务，直接定位失败或积压。</CardDescription>
         </CardHeader>
         <CardContent>
           {loading || !state ? (

@@ -52,7 +52,7 @@ func (h *ApiKeyHandler) SetEnabled(c *gin.Context) {
 		response.Fail(c, http.StatusBadRequest, err.Error())
 		return
 	}
-	item, err := h.svc.SetEnabled(c.Request.Context(), id, req.Enabled)
+	item, err := h.svc.SetEnabled(c.Request.Context(), id, *req.Enabled)
 	if err != nil {
 		response.FailWithError(c, err)
 		return

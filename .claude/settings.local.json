@@ -6,7 +6,9 @@
       "Bash(go build ./...)",
       "Bash(go test ./internal/octomodule/...)",
       "Bash(bun add @tanstack/react-query)",
-      "Bash(bun run build)"
+      "Bash(bun run build)",
+      "Bash(go build ./cmd/scheduler ./cmd/octomanger)",
+      "Bash(go build ./cmd/...)"
     ]
   }
 }

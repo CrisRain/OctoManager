@@ -10,7 +10,7 @@ type CallbackStatus = "processing" | "success" | "error" | "detached";
 
 export function OAuthCallbackPage() {
   const [status, setStatus] = useState<CallbackStatus>("processing");
-  const [message, setMessage] = useState("Processing OAuth callback...");
+  const [message, setMessage] = useState("正在处理 OAuth 回调...");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -30,10 +30,10 @@ export function OAuthCallbackPage() {
         setMessage(payload.error_description || payload.error);
       } else if (payload.code) {
         setStatus("success");
-        setMessage("Authorization completed. You can return to the original window.");
+        setMessage("授权完成，可返回原始窗口。");
       } else {
         setStatus("error");
-        setMessage("Callback did not include authorization code.");
+        setMessage("回调未包含授权码。");
       }
 
       const closeTimer = window.setTimeout(() => window.close(), 300);
@@ -48,21 +48,21 @@ export function OAuthCallbackPage() {
 
     if (payload.code) {
       setStatus("detached");
-      setMessage("Authorization succeeded, but no opener window was detected. You can close this page.");
+      setMessage("授权成功，但未检测到父窗口，可关闭此页面。");
       return;
     }
 
     setStatus("error");
-    setMessage("Callback parameters are missing.");
+    setMessage("回调参数缺失。");
   }, []);
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-xl">
         <CardHeader>
-          <CardTitle>OAuth Callback</CardTitle>
+          <CardTitle>OAuth 回调</CardTitle>
           <CardDescription>
-            Relay Outlook OAuth result back to the management page.
+            将 Outlook OAuth 结果转发回管理页面。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -74,7 +74,7 @@ export function OAuthCallbackPage() {
             <span>{message}</span>
           </div>
           <p className="text-xs text-muted-foreground">
-            Current URL: <code className="font-mono">{window.location.pathname}</code>
+            当前 URL：<code className="font-mono">{window.location.pathname}</code>
           </p>
         </CardContent>
       </Card>

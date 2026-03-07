@@ -380,7 +380,7 @@ export function OctoModulesPage() {
       return (
         <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
           <CheckCircle2 className="mr-1 h-3 w-3" />
-          Ready
+          就绪
         </Badge>
       );
     }
@@ -388,11 +388,11 @@ export function OctoModulesPage() {
       return (
         <Badge variant="destructive">
           <AlertCircle className="mr-1 h-3 w-3" />
-          Error
+          异常
         </Badge>
       );
     }
-    return <Badge variant="secondary">Unknown</Badge>;
+    return <Badge variant="secondary">未知</Badge>;
   }, [selectedModule]);
 
   return (
@@ -435,15 +435,15 @@ export function OctoModulesPage() {
                       {module.exists ? (
                         <Badge variant="outline" className="text-green-600 border-green-200 bg-green-50">
                           <CheckCircle2 className="mr-1 h-3 w-3" />
-                          Ready
+                          就绪
                         </Badge>
                       ) : module.error ? (
                         <Badge variant="destructive">
                           <AlertCircle className="mr-1 h-3 w-3" />
-                          Error
+                          异常
                         </Badge>
                       ) : (
-                        <Badge variant="secondary">Unknown</Badge>
+                        <Badge variant="secondary">未知</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
@@ -452,7 +452,7 @@ export function OctoModulesPage() {
                           size="sm"
                           variant="outline"
                           onClick={() => openManage(module)}
-                          title="Manage"
+                          title="管理"
                         >
                           <Pencil className="mr-1 h-3 w-3" />
                           管理
