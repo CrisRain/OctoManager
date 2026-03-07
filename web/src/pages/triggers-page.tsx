@@ -46,6 +46,63 @@ const DEFAULT_FORM: TriggerFormState = {
   enabled: true,
 };
 
+function extractActionKeys(capabilities: AccountType["capabilities"]): string[] {
+  const rawActions = capabilities.actions;
+  if (!Array.isArray(rawActions)) {
+    return [];
+  }
+
+  const keys = new Set<string>();
+  for (const raw of rawActions) {
+    if (typeof raw === "string") {
+      const key = raw.trim();
+      if (key) {
+        keys.add(key);
+      }
+      continue;
+    }
+
+    if (!raw || typeof raw !== "object") {
+      continue;
+    }
+
+    const key = String((raw as Record<string, unknown>).key ?? "").trim();
+    if (key) {
+      keys.add(key);
+    }
+  }
+
+  return Array.from(keys);
+}
+
+function buildDefaultForm(genericTypes: AccountType[]): TriggerFormState {
+  const firstType = genericTypes[0];
+  const firstAction = firstType ? extractActionKeys(firstType.capabilities)[0] ?? "" : "";
+
+  return {
+    ...DEFAULT_FORM,
+    typeKey: firstType?.key ?? "",
+    actionKey: firstAction,
+  };
+}
+
+function parseJSONObjectText(value: string, fieldName: string): Record<string, unknown> {
+  const raw = value.trim() || "{}";
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error(`${fieldName} 不是合法 JSON`);
+  }
+
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${fieldName} 必须是 JSON 对象`);
+  }
+
+  return parsed as Record<string, unknown>;
+}
+
 export function TriggersPage() {
   const [items, setItems] = useState<TriggerEndpoint[]>([]);
   const [types, setTypes] = useState<AccountType[]>([]);
@@ -59,6 +116,14 @@ export function TriggersPage() {
   const genericTypes = useMemo(
     () => types.filter((item) => item.category === "generic"),
     [types]
+  );
+  const selectedType = useMemo(
+    () => genericTypes.find((item) => item.key === form.typeKey) ?? null,
+    [genericTypes, form.typeKey]
+  );
+  const suggestedActions = useMemo(
+    () => (selectedType ? extractActionKeys(selectedType.capabilities) : []),
+    [selectedType]
   );
 
   const webhookBase = useMemo(() => {
@@ -88,14 +153,46 @@ export function TriggersPage() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!formOpen || editing || form.typeKey || genericTypes.length === 0) {
+      return;
+    }
+
+    const defaults = buildDefaultForm(genericTypes);
+    setForm((current) => ({
+      ...current,
+      typeKey: defaults.typeKey,
+      actionKey: current.actionKey || defaults.actionKey,
+    }));
+  }, [editing, form.actionKey, form.typeKey, formOpen, genericTypes]);
+
+  useEffect(() => {
+    if (!formOpen || editing || suggestedActions.length === 0 || form.actionKey.trim()) {
+      return;
+    }
+
+    setForm((current) => ({
+      ...current,
+      actionKey: suggestedActions[0],
+    }));
+  }, [editing, form.actionKey, formOpen, suggestedActions]);
+
   const updateForm = (patch: Partial<TriggerFormState>) => {
     setForm((current) => ({ ...current, ...patch }));
+  };
+
+  const handleDialogChange = (open: boolean) => {
+    setFormOpen(open);
+    if (!open) {
+      setCreatedResult(null);
+      setEditing(null);
+    }
   };
 
   const openCreate = () => {
     setEditing(null);
     setCreatedResult(null);
-    setForm(DEFAULT_FORM);
+    setForm(buildDefaultForm(genericTypes));
     setFormOpen(true);
   };
 
@@ -115,30 +212,31 @@ export function TriggersPage() {
     setFormOpen(true);
   };
 
-  const parseJsonText = (value: string, label: string) => {
-    if (!value.trim()) {
-      return {};
-    }
-    try {
-      return JSON.parse(value) as Record<string, unknown>;
-    } catch {
-      toast.error(`${label} 必须是合法 JSON 对象`);
-      throw new Error("invalid json");
-    }
-  };
-
   const handleSave = async () => {
-    if (!form.name.trim() || !form.slug.trim() || !form.typeKey.trim() || !form.actionKey.trim()) {
-      toast.error("名称、Slug、类型和动作不能为空");
+    if (!form.name.trim()) {
+      toast.error("请输入 Trigger 名称");
+      return;
+    }
+    if (!form.slug.trim()) {
+      toast.error("请输入 Trigger Slug");
+      return;
+    }
+    if (!form.typeKey.trim()) {
+      toast.error(genericTypes.length === 0 ? "请先创建一个 generic 账号类型" : "请选择 generic 账号类型");
+      return;
+    }
+    if (!form.actionKey.trim()) {
+      toast.error("请输入 Action Key");
       return;
     }
 
     let defaultSelector: Record<string, unknown>;
     let defaultParams: Record<string, unknown>;
     try {
-      defaultSelector = parseJsonText(form.defaultSelector, "默认 selector");
-      defaultParams = parseJsonText(form.defaultParams, "默认 params");
-    } catch {
+      defaultSelector = parseJSONObjectText(form.defaultSelector, "默认 selector");
+      defaultParams = parseJSONObjectText(form.defaultParams, "默认 params");
+    } catch (error) {
+      toast.error(extractErrorMessage(error));
       return;
     }
 
@@ -160,6 +258,8 @@ export function TriggersPage() {
           enabled: form.enabled,
         });
         toast.success("Trigger 已更新");
+        setFormOpen(false);
+        setEditing(null);
       } else {
         const result = await api.createTrigger(payload);
         setCreatedResult(result);
@@ -196,6 +296,8 @@ export function TriggersPage() {
       toast.error("复制失败");
     }
   };
+
+  const hasGenericTypes = genericTypes.length > 0;
 
   return (
     <div className="space-y-4">
@@ -278,7 +380,7 @@ export function TriggersPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={formOpen} onOpenChange={setFormOpen}>
+      <Dialog open={formOpen} onOpenChange={handleDialogChange}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{editing ? "编辑 Trigger" : "新建 Trigger"}</DialogTitle>
@@ -288,16 +390,27 @@ export function TriggersPage() {
           </DialogHeader>
 
           <div className="grid gap-4">
+            {!hasGenericTypes && !editing ? (
+              <div className="rounded-md border border-dashed border-border/80 bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
+                当前没有可用的 generic 账号类型。先到“账号类型”页面创建一个 generic 类型，再回来创建 Trigger。
+              </div>
+            ) : null}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>名称</Label>
-                <Input value={form.name} onChange={(event) => updateForm({ name: event.target.value })} />
+                <Input
+                  value={form.name}
+                  onChange={(event) => updateForm({ name: event.target.value })}
+                  placeholder="用户注册回调"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Slug</Label>
                 <Input
                   value={form.slug}
                   onChange={(event) => updateForm({ slug: event.target.value })}
+                  placeholder="user-register"
                   disabled={!!editing}
                 />
               </div>
@@ -306,23 +419,54 @@ export function TriggersPage() {
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>类型</Label>
-                <Select value={form.typeKey} onValueChange={(value) => updateForm({ typeKey: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择 generic 类型" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {genericTypes.map((item) => (
-                      <SelectItem key={item.key} value={item.key}>
-                        {item.name} ({item.key})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {hasGenericTypes ? (
+                  <Select value={form.typeKey} onValueChange={(value) => updateForm({ typeKey: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择 generic 类型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {genericTypes.map((item) => (
+                        <SelectItem key={item.key} value={item.key}>
+                          {item.name} ({item.key})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <Input value={form.typeKey} placeholder="暂无可用 generic 类型" readOnly disabled />
+                )}
+                <p className="text-xs text-muted-foreground">这里只允许绑定 generic 账号类型。</p>
               </div>
+
               <div className="space-y-2">
                 <Label>动作</Label>
-                <Input value={form.actionKey} onChange={(event) => updateForm({ actionKey: event.target.value })} />
+                <Input
+                  value={form.actionKey}
+                  onChange={(event) => updateForm({ actionKey: event.target.value })}
+                  placeholder="REGISTER"
+                />
+                {suggestedActions.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedActions.map((action) => (
+                      <Button
+                        key={action}
+                        type="button"
+                        size="sm"
+                        variant={form.actionKey.trim() === action ? "secondary" : "outline"}
+                        className="h-7 px-2 text-xs"
+                        onClick={() => updateForm({ actionKey: action })}
+                      >
+                        {action}
+                      </Button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    当前类型未声明 capabilities.actions，可手动输入 Action Key。
+                  </p>
+                )}
               </div>
+
               <div className="space-y-2">
                 <Label>触发方式</Label>
                 <Select value={form.mode} onValueChange={(value: TriggerMode) => updateForm({ mode: value })}>
@@ -381,7 +525,11 @@ export function TriggersPage() {
                     <div className="mt-3 text-xs text-muted-foreground">Trigger Token，仅显示一次</div>
                     <div className="mt-1 flex items-center gap-2">
                       <code className="flex-1 break-all text-xs">{createdResult.raw_token}</code>
-                      <Button size="icon" variant="outline" onClick={() => void handleCopy(createdResult.raw_token ?? "")}>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => void handleCopy(createdResult.raw_token ?? "")}
+                      >
                         <Copy className="h-4 w-4" />
                       </Button>
                     </div>
@@ -392,10 +540,10 @@ export function TriggersPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setFormOpen(false)}>
+            <Button variant="outline" onClick={() => handleDialogChange(false)}>
               关闭
             </Button>
-            <Button onClick={() => void handleSave()} disabled={saving}>
+            <Button onClick={() => void handleSave()} disabled={saving || (!editing && !hasGenericTypes)}>
               {saving ? "保存中..." : editing ? "保存" : "创建"}
             </Button>
           </DialogFooter>

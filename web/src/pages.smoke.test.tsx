@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import React from "react";
 import { BrowserRouter, MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -465,6 +465,38 @@ describe("frontend smoke renders", () => {
     await waitFor(() => expect(mockState.apiFn("listAccountTypes")).toHaveBeenCalled());
   });
 
+  it("preselects the first generic type when creating a trigger", async () => {
+    render(
+      <MemoryRouter>
+        <TriggersPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("demo-trigger")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "新建 Trigger" }));
+
+    expect(await screen.findByText("Generic Demo (generic_demo)")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("REGISTER")).toBeInTheDocument();
+  });
+
+  it("shows a clear empty-state when no generic account types exist", async () => {
+    mockState.apiFn("listAccountTypes").mockResolvedValueOnce([]);
+
+    render(
+      <MemoryRouter>
+        <TriggersPage />
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("demo-trigger")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "新建 Trigger" }));
+
+    expect(
+      await screen.findByText("当前没有可用的 generic 账号类型。先到“账号类型”页面创建一个 generic 类型，再回来创建 Trigger。"),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "创建" })).toBeDisabled();
+  });
+
   it("renders octo modules page", async () => {
     render(
       <MemoryRouter>
@@ -485,7 +517,7 @@ describe("frontend smoke renders", () => {
     );
 
     expect(
-      await screen.findByText("Authorization succeeded, but no opener window was detected. You can close this page."),
+      await screen.findByText("授权成功，但未检测到父窗口，可关闭此页面。"),
     ).toBeInTheDocument();
   });
 });
