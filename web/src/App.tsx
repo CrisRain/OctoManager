@@ -32,6 +32,9 @@ const TriggersPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import("@/pages/settings-page").then((module) => ({ default: module.SettingsPage }))
 );
+const SSLCertificatePage = lazy(() =>
+  import("@/pages/ssl-certificate-page").then((module) => ({ default: module.SSLCertificatePage }))
+);
 const OAuthCallbackPage = lazy(() =>
   import("@/pages/oauth-callback-page").then((module) => ({ default: module.OAuthCallbackPage }))
 );
@@ -120,6 +123,7 @@ export function App() {
         <Route path="/api-keys" element={withRouteSuspense(<ApiKeysPage />)} />
         <Route path="/triggers" element={withRouteSuspense(<TriggersPage />)} />
         <Route path="/settings" element={withRouteSuspense(<SettingsPage />)} />
+        <Route path="/ssl" element={withRouteSuspense(<SSLCertificatePage />)} />
       </Route>
     </Routes>
   );

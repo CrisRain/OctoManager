@@ -7,6 +7,7 @@ import {
   Mail,
   Menu,
   Settings,
+  ShieldCheck,
   Shapes,
   Workflow,
 } from "lucide-react";
@@ -70,6 +71,7 @@ export function AppShell() {
       { to: "/modules", label: "Octo 模块", icon: Layers },
       { to: "/api-keys", label: "API 密钥", icon: KeyRound },
       { to: "/triggers", label: "触发器", icon: Link2 },
+      { to: "/ssl", label: "SSL 证书", icon: ShieldCheck },
       { to: "/settings", label: "设置", icon: Settings },
     ];
   }, [accountTypes]);

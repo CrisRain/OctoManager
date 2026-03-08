@@ -333,6 +333,19 @@ export const api = {
       body: JSON.stringify({ value }),
     }),
 
+  // --- SSL Certificate ---
+  getSSLCertificate: () =>
+    request<{ cert: string; has_key: boolean; meta: { subject: string; issuer: string; not_before: string; not_after: string; sans: string[] } | null }>(
+      "/api/v1/ssl/certificate"
+    ),
+  setSSLCertificate: (payload: { cert: string; key: string }) =>
+    request<{ saved: boolean; meta: { subject: string; issuer: string; not_before: string; not_after: string; sans: string[] } | null }>(
+      "/api/v1/ssl/certificate",
+      { method: "PUT", body: JSON.stringify(payload) }
+    ),
+  deleteSSLCertificate: () =>
+    request<{ deleted: boolean }>("/api/v1/ssl/certificate", { method: "DELETE" }),
+
   // --- Jobs ---
   listJobs: (params?: { limit?: number; offset?: number }) => {
     const search = params ? new URLSearchParams(params as Record<string, string>).toString() : "";

@@ -137,6 +137,12 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	configs.GET("/:key", systemConfigHandler.Get)
 	configs.PUT("/:key", systemConfigHandler.Set)
 
+	sslHandler := handler.NewSSLCertificateHandler(deps.Services.SystemConfig)
+	ssl := v1.Group("/ssl")
+	ssl.GET("/certificate", sslHandler.Get)
+	ssl.PUT("/certificate", sslHandler.Set)
+	ssl.DELETE("/certificate", sslHandler.Delete)
+
 	r.NoRoute(func(c *gin.Context) {
 		if serveFrontend(c, webDistDir) {
 			return
