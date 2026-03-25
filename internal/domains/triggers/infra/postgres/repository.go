@@ -113,16 +113,30 @@ func (r Repository) Patch(ctx context.Context, triggerID int64, input triggerdom
 	if input.Name != nil {
 		current.Name = *input.Name
 	}
+	if input.JobDefinitionID != nil {
+		current.JobDefinitionID = *input.JobDefinitionID
+	}
 	if input.Mode != nil {
 		current.Mode = *input.Mode
+	}
+	if input.DefaultInput != nil {
+		current.DefaultInput = input.DefaultInput
 	}
 	if input.Enabled != nil {
 		current.Enabled = *input.Enabled
 	}
+
+	defaultInputJSON, err := json.Marshal(dbutil.NormalizeMap(current.DefaultInput))
+	if err != nil {
+		return nil, fmt.Errorf("marshal trigger default input: %w", err)
+	}
+
 	row := r.db.WithContext(ctx).Raw(`
-		UPDATE triggers SET name = $2, mode = $3, enabled = $4, updated_at = NOW() WHERE id = $1
+		UPDATE triggers
+		SET name = $2, job_definition_id = $3, mode = $4, default_input_json = $5, enabled = $6, updated_at = NOW()
+		WHERE id = $1
 		RETURNING id, key, name, job_definition_id, mode, default_input_json, token_prefix, enabled, created_at, updated_at`,
-		triggerID, current.Name, current.Mode, current.Enabled,
+		triggerID, current.Name, current.JobDefinitionID, current.Mode, defaultInputJSON, current.Enabled,
 	).Row()
 	item, err := scanTrigger(row)
 	if err != nil {
@@ -171,4 +185,3 @@ func scanTrigger(row scanner) (triggerdomain.Trigger, error) {
 	item.DefaultInput = dbutil.DecodeJSONMap(defaultInputJSON)
 	return item, nil
 }
-

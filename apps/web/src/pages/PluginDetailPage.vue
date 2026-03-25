@@ -98,7 +98,7 @@ async function saveSettings() {
 
     <div v-else class="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,_1.15fr)_minmax(16em,_0.85fr)]">
       <!-- Actions list -->
-      <ui-card class="min-w-0 flex-1 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
+      <ui-card class="min-w-0 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
         <template #title>
           <div class="flex items-center gap-2">
             <icon-thunderbolt class="h-4 w-4 text-[var(--accent)]" />
@@ -125,7 +125,7 @@ async function saveSettings() {
 
       <!-- Sidebar info -->
       <div class="flex flex-col gap-6">
-        <ui-card class="min-w-0 flex-1 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
+        <ui-card class="min-w-0 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
           <template #title>
             <div class="flex items-center gap-2">
               <icon-info-circle class="h-4 w-4 text-sky-600" />
@@ -158,7 +158,7 @@ async function saveSettings() {
           </div>
         </ui-card>
 
-        <ui-card class="min-w-0 flex-1 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
+        <ui-card class="min-w-0 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
           <template #title>
             <div class="flex items-center gap-2">
               <icon-tool class="h-4 w-4 text-amber-600" />
@@ -185,7 +185,7 @@ async function saveSettings() {
         <!-- Settings panel -->
         <ui-card
           v-if="plugin.manifest.settings?.length"
-          class="min-w-0 flex-1 rounded-xl border overflow-hidden border-slate-200 bg-white shadow"
+          class="min-w-0 rounded-xl border overflow-hidden border-slate-200 bg-white shadow"
         >
           <template #title>
             <div class="flex items-center gap-2">
@@ -223,18 +223,19 @@ async function saveSettings() {
                   <p v-if="s.description" class="text-sm leading-6 text-slate-500">{{ s.description }}</p>
                 </div>
               </ui-form-item>
+
+              <div class="flex items-center justify-end gap-3 border-t border-slate-200 pt-4 max-md:flex-col max-md:items-stretch">
+                <ui-button
+                  type="primary"
+                  class="max-md:w-full max-md:justify-center"
+                  :loading="settings.saving.value"
+                  @click="saveSettings"
+                >
+                  保存设置
+                </ui-button>
+              </div>
             </ui-form>
           </ui-spin>
-          <template #footer>
-            <ui-button
-              type="primary"
-              class="max-md:w-full max-md:justify-center"
-              :loading="settings.saving.value"
-              @click="saveSettings"
-            >
-              保存设置
-            </ui-button>
-          </template>
         </ui-card>
       </div>
     </div>

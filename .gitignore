@@ -13,8 +13,7 @@ bin/
 *.so
 *.dylib
 
-# 测试相关产物 / 源文件
-*_test.go
+# 测试相关产物
 *.spec.*
 *.test.*
 *.test

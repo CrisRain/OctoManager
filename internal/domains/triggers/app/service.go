@@ -37,9 +37,6 @@ func (s Service) Create(ctx context.Context, input triggerdomain.CreateInput) (*
 	if strings.TrimSpace(input.Mode) == "" {
 		input.Mode = "async"
 	}
-	if !input.Enabled {
-		input.Enabled = true
-	}
 
 	token, err := newToken()
 	if err != nil {
@@ -120,7 +117,6 @@ func (s Service) fire(ctx context.Context, trigger triggerdomain.Trigger, input 
 		ExecutionID: &execution.ID,
 	}, nil
 }
-
 
 func newToken() (string, error) {
 	buffer := make([]byte, 16)

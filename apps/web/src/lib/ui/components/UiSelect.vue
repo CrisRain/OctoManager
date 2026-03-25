@@ -51,6 +51,8 @@ const wrapperClass = computed(() =>
   ),
 );
 
+const hasRegisteredOptions = computed(() => optionsMap.size > 0);
+
 // Map of value -> label
 const optionsMap = reactive(new Map<unknown, string>());
 
@@ -162,7 +164,7 @@ onBeforeUnmount(() => {
         @click.stop
       >
         <slot />
-        <div v-if="!$slots.default" class="px-3 py-2 text-sm text-slate-400 text-center">暂无选项</div>
+        <div v-if="!hasRegisteredOptions" class="px-3 py-2 text-sm text-slate-400 text-center">暂无选项</div>
       </div>
     </Teleport>
   </div>

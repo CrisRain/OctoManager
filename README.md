@@ -126,6 +126,8 @@ OctoManger/
 | `DATABASE_DSN` | — | ✅ | PostgreSQL 连接字符串 |
 | `REDIS_ADDR` | — | ❌ | Redis 地址，缺失时降级运行 |
 | `API_ADDR` | `:8080` | ❌ | HTTP 监听地址 |
+| `API_READ_TIMEOUT` | `15s` | ❌ | API 请求读取超时 |
+| `API_IDLE_TIMEOUT` | `60s` | ❌ | API Keep-Alive 空闲超时 |
 | `WEB_DIST_DIR` | `/app/web-dist` | ❌ | 构建后的前端资源目录 |
 | `PLUGINS_DIR` | `/app/plugins/modules` | ❌ | Python 插件模块目录 |
 | `PLUGIN_SDK_DIR` | `/app/plugins/sdk/python` | ❌ | Python SDK 路径 |
@@ -133,7 +135,7 @@ OctoManger/
 | `PLUGINS_TIMEOUT_ACCOUNT` | `60s` | ❌ | 账号页面直连插件执行超时 |
 | `PLUGINS_TIMEOUT_JOB` | `10m` | ❌ | Job 模式插件执行超时 |
 | `PLUGINS_TIMEOUT_AGENT` | `0s` | ❌ | Agent 模式插件执行超时（`0s`=禁用） |
-| `X_ADMIN_KEY` | — | ❌ | API 管理员密钥（空则无鉴权） |
+| `ADMIN_KEY` | — | ❌ | API 管理员密钥（空则无鉴权，兼容 `X_ADMIN_KEY` / `OCTO_ADMIN_KEY`） |
 | `LOG_LEVEL` | `info` | ❌ | 日志级别（debug/info/warn/error）|
 | `WORKER_POLL_INTERVAL` | — | ❌ | Worker 轮询间隔 |
 

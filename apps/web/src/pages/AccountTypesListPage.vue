@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { IconLayers, IconPlus, IconEdit, IconDelete } from "@/lib/icons";
 
@@ -14,6 +14,8 @@ const confirm = useConfirm();
 const { withErrorHandler } = useErrorHandler();
 
 const { data: items, loading, refresh } = useAccountTypes();
+const selectedKeys = ref<string[]>([]);
+watch(items, () => { selectedKeys.value = []; });
 const deleteAccountTypeOp = useDeleteAccountType();
 
 // 分类筛选
@@ -89,7 +91,7 @@ async function deleteAccountType(item: any) {
       message.success(`已删除账号类型: ${item.name}`);
       await refresh();
     },
-    { action: "删除", showSuccess: true }
+    { action: "删除", showSuccess: false }
   );
 }
 
@@ -106,7 +108,7 @@ async function handleBatchDelete(items: any[]) {
       message.success(`已删除 ${items.length} 个账号类型`);
       await refresh();
     },
-    { action: "批量删除", showSuccess: true }
+    { action: "批量删除", showSuccess: false }
   );
 }
 </script>
@@ -133,6 +135,8 @@ async function handleBatchDelete(items: any[]) {
       :data="filteredItems"
       :loading="loading"
       v-model:search="searchKeyword"
+      v-model:selectedKeys="selectedKeys"
+      row-key="id"
       @refresh="refresh"
       @batch-delete="handleBatchDelete"
     >
@@ -159,10 +163,19 @@ async function handleBatchDelete(items: any[]) {
       <ui-card
         v-for="item in filteredItems"
         :key="item.key"
-        class="cursor-pointer"
+        class="cursor-pointer relative"
         hoverable
         @click="openDetail(item)"
       >
+        <input
+          type="checkbox"
+          :checked="selectedKeys.includes(String(item.id))"
+          class="absolute top-3 right-3 h-4 w-4 cursor-pointer rounded border-slate-300 accent-[var(--accent)] z-10"
+          @click.stop
+          @change.stop="selectedKeys.includes(String(item.id))
+            ? selectedKeys = selectedKeys.filter(k => k !== String(item.id))
+            : selectedKeys = [...selectedKeys, String(item.id)]"
+        />
         <div class="mb-3 flex items-center gap-3">
           <div
             class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl text-sm"

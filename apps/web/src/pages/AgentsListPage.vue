@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   IconRobot, IconPlayArrow, IconStop, IconEye,
@@ -18,6 +18,8 @@ const confirm = useConfirm();
 const { withErrorHandler } = useErrorHandler();
 
 const { data: agents, loading, refresh } = useAgents();
+const selectedKeys = ref<string[]>([]);
+watch(agents, () => { selectedKeys.value = []; });
 const startAgent = useStartAgent();
 const stopAgent = useStopAgent();
 const deleteAgentAction = useDeleteAgent();
@@ -91,7 +93,7 @@ async function handleStart(id: number) {
       message.success("启动指令已发送");
       await refresh();
     },
-    { action: "启动 Agent", showSuccess: true }
+    { action: "启动 Agent", showSuccess: false }
   );
 }
 
@@ -103,7 +105,7 @@ async function handleStop(id: number) {
       message.success("停止指令已发送");
       await refresh();
     },
-    { action: "停止 Agent", showSuccess: true }
+    { action: "停止 Agent", showSuccess: false }
   );
 }
 
@@ -122,7 +124,7 @@ async function handleDeleteAgent(agent: Agent) {
       }
       await refresh();
     },
-    { action: "删除", showSuccess: true }
+    { action: "删除", showSuccess: false }
   );
 }
 
@@ -142,7 +144,7 @@ async function handleBatchDelete(items: Agent[]) {
       }
       await refresh();
     },
-    { action: "批量删除", showSuccess: true }
+    { action: "批量删除", showSuccess: false }
   );
 }
 
@@ -182,6 +184,7 @@ async function handleBatchExport(items: Agent[]) {
       :data="filteredAgents"
       :loading="loading"
       v-model:search="searchKeyword"
+      v-model:selectedKeys="selectedKeys"
       @refresh="refresh"
       @batch-delete="handleBatchDelete"
       @batch-export="handleBatchExport"
@@ -218,6 +221,7 @@ async function handleBatchExport(items: Agent[]) {
         :bordered="false"
         row-key="id"
         :row-selection="{ type: 'checkbox' }"
+        v-model:selectedKeys="selectedKeys"
       >
         <template #columns>
           <!-- ID -->

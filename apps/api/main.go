@@ -4,10 +4,8 @@ import (
 	"context"
 	"os"
 	"os/signal"
-	"path"
-	"path/filepath"
-	"strings"
 	"syscall"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -37,7 +35,9 @@ func main() {
 
 	h := server.New(
 		server.WithHostPorts(application.Config.Server.APIAddr),
-		server.WithExitWaitTime(5),
+		server.WithReadTimeout(application.Config.Server.ReadTimeout),
+		server.WithIdleTimeout(application.Config.Server.IdleTimeout),
+		server.WithExitWaitTime(5*time.Second),
 	)
 
 	root := h.Group("/")
@@ -59,22 +59,16 @@ func main() {
 	distDir := application.Config.Server.WebDistDir
 	if distDir != "" {
 		h.NoRoute(func(reqCtx context.Context, c *app.RequestContext) {
-			urlPath := string(c.Path())
-			cleanPath := path.Clean(urlPath)
-			relativePath := strings.TrimPrefix(cleanPath, "/")
-			if relativePath == "" || relativePath == "." {
-				relativePath = "index.html"
-			}
-
-			filePath := filepath.Join(distDir, filepath.FromSlash(relativePath))
-			if info, err := os.Stat(filePath); err == nil && !info.IsDir() {
-				c.File(filePath)
-				return
-			}
-
-			indexPath := filepath.Join(distDir, "index.html")
-			if _, err := os.Stat(indexPath); err == nil {
-				c.File(indexPath)
+			file, ok := resolveStaticFile(
+				distDir,
+				string(c.Method()),
+				string(c.Path()),
+				string(c.GetHeader("Accept")),
+				string(c.GetHeader("Accept-Encoding")),
+			)
+			if ok {
+				applyStaticFileHeaders(c, file)
+				app.ServeFileUncompressed(c, file.diskPath)
 				return
 			}
 

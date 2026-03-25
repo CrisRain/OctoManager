@@ -129,7 +129,7 @@ sequenceDiagram
 | `X-Admin-Key` | `{key}` |
 | `Authorization` | `Bearer {key}` |
 
-> **开发模式**：若 `X_ADMIN_KEY` 环境变量为空，中间件为 no-op，所有请求均通过。
+> **开发模式**：若 `ADMIN_KEY` 环境变量为空，中间件为 no-op，所有请求均通过；同时兼容旧变量 `X_ADMIN_KEY` / `OCTO_ADMIN_KEY`。
 
 ---
 

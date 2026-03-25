@@ -3,6 +3,8 @@
  * 账号列表页 - UX优化版本
  * 集成SmartListBar、RowActionsMenu
  */
+import { computed, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { IconUser, IconCheck, IconSync, IconStop, IconPlayArrow } from "@/lib/icons";
 
 import { useAccountTypes } from "@/composables/useAccountTypes";
@@ -19,8 +21,11 @@ const { withErrorHandler } = useErrorHandler();
 // 数据加载
 const { data: types, loading: loadingTypes } = useAccountTypes();
 const { data: accounts, loading: loadingAccounts, error: accountsError, refresh } = useAccounts();
+watch(accounts, () => { selectedKeys.value = []; });
 const patchAccount = usePatchAccount();
 const deleteAccountOp = useDeleteAccount();
+
+const selectedKeys = ref<string[]>([]);
 
 // 类型筛选
 const typeKey = computed(() => route.params.typeKey as string | undefined);
@@ -131,7 +136,6 @@ async function toggleAccountStatus(account: any) {
   await withErrorHandler(
     async () => {
       await patchAccount.execute(account.id, { status: newStatus });
-      message.successAction(action);
       await refresh();
     },
     { action, showSuccess: true }
@@ -149,7 +153,7 @@ async function deleteAccount(account: any) {
       message.success(`已删除账号: ${account.identifier}`);
       await refresh();
     },
-    { action: "删除", showSuccess: true }
+    { action: "删除", showSuccess: false }
   );
 }
 
@@ -174,7 +178,7 @@ async function handleBatchDelete(items: any[]) {
       message.success(`已删除 ${items.length} 个账号`);
       await refresh();
     },
-    { action: "批量删除", showSuccess: true }
+    { action: "批量删除", showSuccess: false }
   );
 }
 
@@ -201,7 +205,6 @@ async function handleBatchToggle(selectedItems: any[], enable: boolean) {
     async () => {
       const newStatus = enable ? "active" : "inactive";
       await Promise.all(selectedItems.map((item) => patchAccount.execute(item.id, { status: newStatus })));
-      message.successAction(`批量${action}`);
       await refresh();
     },
     { action: `批量${action}`, showSuccess: true }
@@ -231,6 +234,7 @@ async function handleBatchToggle(selectedItems: any[], enable: boolean) {
       :data="filteredAccounts"
       :loading="loadingAccounts || loadingTypes"
       v-model:search="searchKeyword"
+      v-model:selectedKeys="selectedKeys"
       @refresh="refresh"
       @batch-delete="handleBatchDelete"
       @batch-export="handleBatchExport"
@@ -296,6 +300,7 @@ async function handleBatchToggle(selectedItems: any[], enable: boolean) {
         :bordered="false"
         row-key="id"
         :row-selection="{ type: 'checkbox' }"
+        v-model:selectedKeys="selectedKeys"
       >
         <template #columns>
           <!-- 账号标识 -->

@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { IconEdit, IconClockCircle } from "@/lib/icons";
+import { IconEdit } from "@/lib/icons";
 
 import { FormActionBar, FormPageLayout, PageHeader, SmartForm } from "@/components/index";
 import { useJobDefinitions, usePatchJobDefinition } from "@/composables/useJobs";
-import { useMessage, useErrorHandler } from "@/composables";
+import { useErrorHandler, useMessage, usePlugins } from "@/composables";
 import type { FieldConfig } from "@/components/smart-form.types";
 import { to } from "@/router/registry";
 
@@ -16,6 +16,7 @@ const jobId = Number(route.params.id);
 const message = useMessage();
 const { withErrorHandler } = useErrorHandler();
 const { data: definitions, loading } = useJobDefinitions();
+const { data: plugins } = usePlugins();
 const patch = usePatchJobDefinition();
 
 const job = computed(() => definitions.value.find((j) => j.id === jobId));
@@ -24,6 +25,8 @@ const formRef = ref<InstanceType<typeof SmartForm>>();
 
 const formData = ref({
   name: "",
+  plugin_key: "",
+  action: "",
   input: "{}",
   enabled: true,
   cron_expression: "",
@@ -34,6 +37,8 @@ const formData = ref({
 watch(job, (j) => {
   if (!j) return;
   formData.value.name = j.name;
+  formData.value.plugin_key = j.plugin_key;
+  formData.value.action = j.action;
   formData.value.input = JSON.stringify(j.input ?? {}, null, 2);
   formData.value.enabled = j.enabled;
   formData.value.cron_expression = j.schedule?.cron_expression ?? "";
@@ -41,7 +46,70 @@ watch(job, (j) => {
   formData.value.schedule_enabled = !!j.schedule?.cron_expression;
 }, { immediate: true });
 
-const formFields: FieldConfig[] = [
+const pluginOptions = computed(() => {
+  const options = plugins.value
+    .filter((plugin) => plugin.healthy)
+    .map((plugin) => ({
+      label: plugin.manifest.name ? `${plugin.manifest.name} (${plugin.manifest.key})` : plugin.manifest.key,
+      value: plugin.manifest.key,
+    }));
+
+  if (
+    job.value
+    && formData.value.plugin_key === job.value.plugin_key
+    && formData.value.plugin_key
+    && !options.some((option) => option.value === formData.value.plugin_key)
+  ) {
+    options.unshift({
+      label: `当前已保存插件 ${formData.value.plugin_key}（插件列表中未找到）`,
+      value: formData.value.plugin_key,
+    });
+  }
+
+  return options;
+});
+
+const selectedPlugin = computed(() =>
+  plugins.value.find((plugin) => plugin.manifest.key === formData.value.plugin_key) ?? null,
+);
+
+const actionOptions = computed(() => {
+  const options = (selectedPlugin.value?.manifest.actions ?? []).map((action) => ({
+    label: action.name ? `${action.name} (${action.key})` : action.key,
+    value: action.key,
+  }));
+
+  if (
+    job.value
+    && formData.value.plugin_key === job.value.plugin_key
+    && formData.value.action === job.value.action
+    && formData.value.action
+    && !options.some((option) => option.value === formData.value.action)
+  ) {
+    options.unshift({
+      label: `当前已保存动作 ${formData.value.action}（插件 manifest 中未找到）`,
+      value: formData.value.action,
+    });
+  }
+
+  return options;
+});
+
+watch(() => formData.value.plugin_key, () => {
+  if (!actionOptions.value.some((option) => option.value === formData.value.action)) {
+    formData.value.action = "";
+  }
+});
+
+const timezoneOptions = [
+  { label: "UTC (协调世界时)", value: "UTC" },
+  { label: "Asia/Shanghai (上海)", value: "Asia/Shanghai" },
+  { label: "Asia/Tokyo (东京)", value: "Asia/Tokyo" },
+  { label: "America/New_York (纽约)", value: "America/New_York" },
+  { label: "Europe/London (伦敦)", value: "Europe/London" },
+];
+
+const formFields = computed<FieldConfig[]>(() => [
   {
     name: "name",
     label: "任务名称",
@@ -49,6 +117,24 @@ const formFields: FieldConfig[] = [
     placeholder: "例如: GitHub 账号验证",
     required: true,
     description: "任务的显示名称，用于界面展示",
+  },
+  {
+    name: "plugin_key",
+    label: "插件",
+    type: "select",
+    placeholder: pluginOptions.value.length ? "请选择插件" : "暂无可用插件",
+    required: true,
+    description: "只展示当前可用的插件；当前值缺失时会保留旧配置",
+    options: pluginOptions.value,
+  },
+  {
+    name: "action",
+    label: "动作名称",
+    type: "select",
+    placeholder: formData.value.plugin_key ? "请选择动作" : "请先选择插件",
+    required: true,
+    description: "动作列表来自插件 manifest",
+    options: actionOptions.value,
   },
   {
     name: "enabled",
@@ -82,15 +168,9 @@ const formFields: FieldConfig[] = [
     label: "时区",
     type: "select",
     defaultValue: "UTC",
-    options: [
-      { label: "UTC (协调世界时)", value: "UTC" },
-      { label: "Asia/Shanghai (上海)", value: "Asia/Shanghai" },
-      { label: "Asia/Tokyo (东京)", value: "Asia/Tokyo" },
-      { label: "America/New_York (纽约)", value: "America/New_York" },
-      { label: "Europe/London (伦敦)", value: "Europe/London" },
-    ],
+    options: timezoneOptions,
   },
-];
+]);
 
 const cronPresets = [
   { label: "每分钟", value: "* * * * *" },
@@ -108,7 +188,6 @@ function applyCronPreset(preset: string) {
 async function handleSave() {
   const isValid = formRef.value?.validate();
   if (!isValid) {
-    message.error("请检查表单填写是否正确");
     return;
   }
 
@@ -126,6 +205,8 @@ async function handleSave() {
     async () => {
       await patch.execute(jobId, {
         name: formData.value.name.trim(),
+        plugin_key: formData.value.plugin_key.trim(),
+        action: formData.value.action.trim(),
         input,
         enabled: formData.value.enabled,
         schedule: formData.value.schedule_enabled && formData.value.cron_expression.trim()
@@ -198,7 +279,7 @@ async function handleSave() {
           <template #title>
             <div class="flex items-center gap-2">
               <icon-info-circle class="h-4 w-4 text-[var(--accent)]" />
-              <span>不可修改项</span>
+              <span>任务标识</span>
             </div>
           </template>
 
@@ -208,12 +289,8 @@ async function handleSave() {
               <code class="text-sm font-medium text-slate-700">{{ job?.key }}</code>
             </div>
             <div class="flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
-              <span class="text-xs font-semibold tracking-wider text-slate-500">插件</span>
-              <code class="text-sm font-medium text-slate-700">{{ job?.plugin_key }}</code>
-            </div>
-            <div class="flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
-              <span class="text-xs font-semibold tracking-wider text-slate-500">动作</span>
-              <span class="text-sm font-medium text-[var(--accent)]">{{ job?.action }}</span>
+              <span class="text-xs font-semibold tracking-wider text-slate-500">说明</span>
+              <span class="text-sm leading-6 text-slate-600">插件和动作已支持在左侧表单中通过下拉框切换。</span>
             </div>
           </div>
         </ui-card>

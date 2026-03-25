@@ -99,29 +99,29 @@ export function useEmailAccountsList() {
     );
     if (!confirmed) return;
 
-    await withErrorHandler(
-      async () => {
-        await deleteAccountAction.execute(account.id);
-        message.success("已删除邮箱账号");
-        await refresh();
-      },
-      { action: "删除", showSuccess: true },
-    );
+  await withErrorHandler(
+    async () => {
+      await deleteAccountAction.execute(account.id);
+      message.success("已删除邮箱账号");
+      await refresh();
+    },
+    { action: "删除", showSuccess: false },
+  );
   }
 
   async function handleBatchDelete(items: EmailAccount[]) {
     const confirmed = await confirm.confirm(`确定要删除选中的 ${items.length} 个邮箱账号吗？`);
     if (!confirmed) return;
 
-    await withErrorHandler(
-      async () => {
-        await Promise.all(items.map((item) => deleteAccountAction.execute(item.id)));
-        message.success(`已删除 ${items.length} 个邮箱账号`);
-        await refresh();
-      },
-      { action: "批量删除", showSuccess: true },
-    );
-  }
+  await withErrorHandler(
+    async () => {
+      await Promise.all(items.map((item) => deleteAccountAction.execute(item.id)));
+      message.success(`已删除 ${items.length} 个邮箱账号`);
+      await refresh();
+    },
+    { action: "批量删除", showSuccess: false },
+  );
+}
 
   async function handleBatchExport(items: EmailAccount[]) {
     const data = JSON.stringify(items, null, 2);

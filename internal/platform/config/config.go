@@ -26,8 +26,10 @@ type AppConfig struct {
 }
 
 type ServerConfig struct {
-	APIAddr    string
-	WebDistDir string
+	APIAddr     string
+	WebDistDir  string
+	ReadTimeout time.Duration
+	IdleTimeout time.Duration
 }
 
 type DatabaseConfig struct {
@@ -105,6 +107,8 @@ func Load() (Config, error) {
 	v.SetDefault("app.env", "development")
 	v.SetDefault("server.api_addr", ":8080")
 	v.SetDefault("server.web_dist_dir", "apps/web/dist")
+	v.SetDefault("server.read_timeout", "15s")
+	v.SetDefault("server.idle_timeout", "60s")
 	v.SetDefault("database.max_connections", 8)
 	v.SetDefault("database.connect_timeout", "5s")
 	v.SetDefault("database.query_timeout", "10s")
@@ -152,8 +156,10 @@ func Load() (Config, error) {
 			Env: v.GetString("app.env"),
 		},
 		Server: ServerConfig{
-			APIAddr:    pickEnvOrKey(v, "API_ADDR", "server.api_addr"),
-			WebDistDir: pickEnvOrKey(v, "WEB_DIST_DIR", "server.web_dist_dir"),
+			APIAddr:     pickEnvOrKey(v, "API_ADDR", "server.api_addr"),
+			WebDistDir:  pickEnvOrKey(v, "WEB_DIST_DIR", "server.web_dist_dir"),
+			ReadTimeout: pickDurationEnvOrKey(v, "API_READ_TIMEOUT", "server.read_timeout"),
+			IdleTimeout: pickDurationEnvOrKey(v, "API_IDLE_TIMEOUT", "server.idle_timeout"),
 		},
 		Database: DatabaseConfig{
 			DSN:              dsn,
@@ -168,7 +174,7 @@ func Load() (Config, error) {
 			DB:       v.GetInt("redis.db"),
 		},
 		Auth: AuthConfig{
-			AdminKey: strings.TrimSpace(pickEnvOrKey(v, "ADMIN_KEY", "auth.admin_key")),
+			AdminKey: strings.TrimSpace(pickFirstEnvOrKey(v, []string{"ADMIN_KEY", "X_ADMIN_KEY", "OCTO_ADMIN_KEY"}, "auth.admin_key")),
 		},
 		Worker: WorkerConfig{
 			ID:                 workerID,
@@ -252,6 +258,15 @@ func MustLoad() Config {
 func pickEnvOrKey(v *viper.Viper, envKey, viperKey string) string {
 	if val := strings.TrimSpace(v.GetString(envKey)); val != "" {
 		return val
+	}
+	return v.GetString(viperKey)
+}
+
+func pickFirstEnvOrKey(v *viper.Viper, envKeys []string, viperKey string) string {
+	for _, envKey := range envKeys {
+		if val := strings.TrimSpace(v.GetString(envKey)); val != "" {
+			return val
+		}
 	}
 	return v.GetString(viperKey)
 }

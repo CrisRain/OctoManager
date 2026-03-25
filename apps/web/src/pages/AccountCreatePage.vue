@@ -132,7 +132,6 @@ const manualFormFields = computed<FieldConfig[]>(() => [
 async function handleCreate() {
   const isValid = manualFormRef.value?.validate();
   if (!isValid) {
-    message.error("请检查表单填写是否正确");
     return;
   }
   // Build spec — omit empty-string optional fields

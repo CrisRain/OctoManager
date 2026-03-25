@@ -39,8 +39,21 @@ services:
         condition: service_healthy
     ports:
       - "8080:8080"
+    stop_grace_period: 30s
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python3",
+          "-c",
+          "import sys,urllib.request; sys.exit(0) if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2).status == 200 else sys.exit(1)",
+        ]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
     environment:
       API_ADDR: ":8080"
       WEB_DIST_DIR: "/app/web-dist"

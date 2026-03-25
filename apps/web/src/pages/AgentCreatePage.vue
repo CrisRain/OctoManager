@@ -133,7 +133,6 @@ async function handleSubmit() {
   // 验证表单
   const isValid = formRef.value?.validate();
   if (!isValid) {
-    message.error("请检查表单填写是否正确");
     return;
   }
 
@@ -156,7 +155,7 @@ async function handleSubmit() {
       message.success("Agent 已创建");
       router.push(to.agents.list());
     },
-    { action: "创建 Agent", showSuccess: true }
+    { action: "创建 Agent", showSuccess: false }
   );
 }
 

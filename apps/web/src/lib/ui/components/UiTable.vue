@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, useSlots, useAttrs, type VNode } from "vue";
+import { computed, ref, watch, watchEffect, useSlots, useAttrs, type VNode } from "vue";
 import { flattenNodes, getFromPath, cx } from "../utils";
 import UiSpin from "./UiSpin.vue";
 import UiEmpty from "./UiEmpty.vue";
@@ -20,6 +20,7 @@ interface Props {
   loading?: boolean;
   pagination?: boolean | Record<string, unknown>;
   rowKey?: string | ((record: unknown) => string | number);
+  rowSelection?: { type: "checkbox" } | null;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -28,7 +29,10 @@ const props = withDefaults(defineProps<Props>(), {
   loading: false,
   pagination: false,
   rowKey: "id",
+  rowSelection: null,
 });
+
+const selectedKeys = defineModel<string[]>("selectedKeys", { default: () => [] });
 
 const slots = useSlots();
 const attrs = useAttrs();
@@ -108,6 +112,40 @@ function keyForRow(record: unknown, index: number): string {
   }
   return String(index);
 }
+
+// Row selection
+const headerCheckboxRef = ref<HTMLInputElement | null>(null);
+
+const isAllSelected = computed(() =>
+  allRows.value.length > 0 &&
+  allRows.value.every((r, i) => selectedKeys.value.includes(keyForRow(r, i)))
+);
+
+const isIndeterminate = computed(() =>
+  selectedKeys.value.length > 0 && !isAllSelected.value
+);
+
+watchEffect(() => {
+  if (headerCheckboxRef.value) {
+    headerCheckboxRef.value.indeterminate = isIndeterminate.value;
+  }
+});
+
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedKeys.value = [];
+  } else {
+    selectedKeys.value = allRows.value.map((r, i) => keyForRow(r, i));
+  }
+}
+
+function toggleRowSelected(key: string) {
+  if (selectedKeys.value.includes(key)) {
+    selectedKeys.value = selectedKeys.value.filter(k => k !== key);
+  } else {
+    selectedKeys.value = [...selectedKeys.value, key];
+  }
+}
 </script>
 
 <template>
@@ -123,6 +161,18 @@ function keyForRow(record: unknown, index: number): string {
     <table class="ui-table ui-table-element min-w-full border-collapse text-sm">
       <thead v-if="parsedColumns.length">
         <tr>
+          <th
+            v-if="rowSelection"
+            class="ui-table-th border-b border-slate-200 bg-slate-50/50 w-10 px-3 py-3"
+          >
+            <input
+              ref="headerCheckboxRef"
+              type="checkbox"
+              :checked="isAllSelected"
+              class="h-4 w-4 cursor-pointer rounded border-slate-300 accent-[var(--accent)]"
+              @change="toggleSelectAll"
+            />
+          </th>
           <th
             v-for="col in parsedColumns"
             :key="col.key"
@@ -140,6 +190,17 @@ function keyForRow(record: unknown, index: number): string {
           class="ui-table-tr transition-colors duration-150 hover:bg-slate-50/50"
         >
           <td
+            v-if="rowSelection"
+            class="ui-table-td border-b border-slate-200 w-10 px-3 py-3.5 align-top"
+          >
+            <input
+              type="checkbox"
+              :checked="selectedKeys.includes(keyForRow(record, rowIndex))"
+              class="h-4 w-4 cursor-pointer rounded border-slate-300 accent-[var(--accent)]"
+              @change="toggleRowSelected(keyForRow(record, rowIndex))"
+            />
+          </td>
+          <td
             v-for="col in parsedColumns"
             :key="`${col.key}-${rowIndex}`"
             class="ui-table-td ui-table-column border-b border-slate-200 px-5 py-3.5 align-top text-[14px] text-slate-700"
@@ -149,7 +210,7 @@ function keyForRow(record: unknown, index: number): string {
           </td>
         </tr>
         <tr v-if="pagedRows.length === 0">
-          <td class="ui-table-td px-4 py-10" :colspan="Math.max(parsedColumns.length, 1)">
+          <td class="ui-table-td px-4 py-10" :colspan="Math.max(parsedColumns.length, 1) + (rowSelection ? 1 : 0)">
             <slot name="empty">
               <UiEmpty description="暂无数据" />
             </slot>

@@ -181,6 +181,8 @@ export interface JobDefinitionCreateInput {
 
 export interface JobDefinitionPatchInput {
   name?: string;
+  plugin_key?: string;
+  action?: string;
   input?: Record<string, unknown>;
   enabled?: boolean;
   schedule?: ScheduleInput;
@@ -402,7 +404,9 @@ export interface TriggerCreateInput {
 
 export interface TriggerPatchInput {
   name?: string;
+  job_definition_id?: number;
   mode?: string;
+  default_input?: Record<string, unknown>;
   enabled?: boolean;
 }
 

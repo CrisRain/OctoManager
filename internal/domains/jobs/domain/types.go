@@ -91,8 +91,10 @@ type ScheduleInput struct {
 }
 
 type PatchDefinitionInput struct {
-	Name     *string        `json:"name,omitempty"`
-	Input    map[string]any `json:"input,omitempty"`
-	Enabled  *bool          `json:"enabled,omitempty"`
-	Schedule *ScheduleInput `json:"schedule,omitempty"`
+	Name      *string        `json:"name,omitempty"`
+	PluginKey *string        `json:"plugin_key,omitempty"`
+	Action    *string        `json:"action,omitempty"`
+	Input     map[string]any `json:"input,omitempty"`
+	Enabled   *bool          `json:"enabled,omitempty"`
+	Schedule  *ScheduleInput `json:"schedule,omitempty"`
 }

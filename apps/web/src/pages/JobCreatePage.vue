@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { ref, reactive } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import { IconClockCircle, IconPlus } from "@/lib/icons";
 
 import { FormActionBar, FormPageLayout, PageHeader, SmartForm } from "@/components/index";
 import { useCreateJobDefinition } from "@/composables/useJobs";
-import { useMessage, useErrorHandler } from "@/composables";
+import { useErrorHandler, useMessage, usePlugins } from "@/composables";
 import type { FieldConfig } from "@/components/smart-form.types";
 import { to } from "@/router/registry";
 import { Notification } from "@/lib/feedback";
@@ -14,6 +14,7 @@ const router = useRouter();
 const message = useMessage();
 const { withErrorHandler } = useErrorHandler();
 const create = useCreateJobDefinition();
+const { data: plugins } = usePlugins();
 
 // 表单引用
 const formRef = ref<InstanceType<typeof SmartForm>>();
@@ -30,8 +31,42 @@ const formData = ref({
   schedule_enabled: false,
 });
 
+const pluginOptions = computed(() =>
+  plugins.value
+    .filter((plugin) => plugin.healthy)
+    .map((plugin) => ({
+      label: plugin.manifest.name ? `${plugin.manifest.name} (${plugin.manifest.key})` : plugin.manifest.key,
+      value: plugin.manifest.key,
+    })),
+);
+
+const selectedPlugin = computed(() =>
+  plugins.value.find((plugin) => plugin.manifest.key === formData.value.plugin_key) ?? null,
+);
+
+const actionOptions = computed(() =>
+  (selectedPlugin.value?.manifest.actions ?? []).map((action) => ({
+    label: action.name ? `${action.name} (${action.key})` : action.key,
+    value: action.key,
+  })),
+);
+
+watch(() => formData.value.plugin_key, () => {
+  if (!actionOptions.value.some((option) => option.value === formData.value.action)) {
+    formData.value.action = "";
+  }
+});
+
+const timezoneOptions = [
+  { label: "UTC (协调世界时)", value: "UTC" },
+  { label: "Asia/Shanghai (上海)", value: "Asia/Shanghai" },
+  { label: "Asia/Tokyo (东京)", value: "Asia/Tokyo" },
+  { label: "America/New_York (纽约)", value: "America/New_York" },
+  { label: "Europe/London (伦敦)", value: "Europe/London" },
+];
+
 // 表单字段配置
-const formFields: FieldConfig[] = [
+const formFields = computed<FieldConfig[]>(() => [
   {
     name: "key",
     label: "任务标识符",
@@ -50,19 +85,21 @@ const formFields: FieldConfig[] = [
   },
   {
     name: "plugin_key",
-    label: "插件标识符",
-    type: "text",
-    placeholder: "例如: github",
+    label: "插件",
+    type: "select",
+    placeholder: pluginOptions.value.length ? "请选择插件" : "暂无可用插件",
     required: true,
-    description: "要调用的插件标识符",
+    description: "只展示当前可用的插件",
+    options: pluginOptions.value,
   },
   {
     name: "action",
     label: "动作名称",
-    type: "text",
-    placeholder: "例如: verify_profile",
+    type: "select",
+    placeholder: formData.value.plugin_key ? "请选择动作" : "请先选择插件",
     required: true,
-    description: "插件中定义的动作名称",
+    description: "动作列表来自插件 manifest",
+    options: actionOptions.value,
   },
   {
     name: "input",
@@ -90,15 +127,9 @@ const formFields: FieldConfig[] = [
     label: "时区",
     type: "select",
     defaultValue: "UTC",
-    options: [
-      { label: "UTC (协调世界时)", value: "UTC" },
-      { label: "Asia/Shanghai (上海)", value: "Asia/Shanghai" },
-      { label: "Asia/Tokyo (东京)", value: "Asia/Tokyo" },
-      { label: "America/New_York (纽约)", value: "America/New_York" },
-      { label: "Europe/London (伦敦)", value: "Europe/London" },
-    ],
+    options: timezoneOptions,
   },
-];
+]);
 
 // 预设 Cron 表达式选项
 const cronPresets = [
@@ -120,7 +151,6 @@ async function handleCreate() {
   // 验证表单
   const isValid = formRef.value?.validate();
   if (!isValid) {
-    message.error("请检查表单填写是否正确");
     return;
   }
 
@@ -155,7 +185,7 @@ async function handleCreate() {
       Notification.info({ title: "下一步", content: "点击「立即执行」手动触发一次，或在任务详情中配置触发器", duration: 7000 });
       router.push(to.jobs.list());
     },
-    { action: "创建任务", showSuccess: true }
+    { action: "创建任务", showSuccess: false }
   );
 }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { IconApps, IconSync, IconEye, IconRefresh } from "@/lib/icons";
 
@@ -13,6 +13,8 @@ const message = useMessage();
 const { withErrorHandler } = useErrorHandler();
 
 const { data: plugins, loading, refresh } = usePlugins();
+const selectedKeys = ref<string[]>([]);
+watch(plugins, () => { selectedKeys.value = []; });
 const sync = useSyncPlugins();
 
 // 筛选
@@ -54,12 +56,6 @@ async function handleSync() {
       const result = await sync.execute();
       syncResult.value = result;
       await refresh();
-
-      if (result.failed === 0) {
-        message.success(`同步完成，已更新 ${result.synced} 个账号类型`);
-      } else {
-        message.warning(`同步部分失败：成功 ${result.synced}，失败 ${result.failed}`);
-      }
     },
     { action: "同步插件" }
   );
@@ -133,6 +129,8 @@ function closeSyncResult() {
       :data="filteredPlugins"
       :loading="loading"
       v-model:search="searchKeyword"
+      v-model:selectedKeys="selectedKeys"
+      :row-key="(r: any) => r.manifest.key"
       @refresh="refresh"
       @batch-export="handleBatchExport"
     >
@@ -178,7 +176,9 @@ function closeSyncResult() {
           defaultPageSize: 20,
         }"
         :bordered="false"
-        row-key="manifest.key"
+        :row-key="(r: any) => r.manifest.key"
+        :row-selection="{ type: 'checkbox' }"
+        v-model:selectedKeys="selectedKeys"
       >
         <template #columns>
           <!-- 插件 Key -->

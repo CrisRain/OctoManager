@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useRouter } from "vue-router";
 import { useTriggers, useDeleteTrigger, useFireTrigger } from "@/composables/useTriggers";
 import { useMessage, useConfirm, useErrorHandler } from "@/composables";
@@ -11,10 +11,12 @@ const message = useMessage();
 const confirm = useConfirm();
 const { withErrorHandler } = useErrorHandler();
 const { data: items, loading, refresh } = useTriggers();
+watch(items, () => { selectedKeys.value = []; });
 const deleteTrigger = useDeleteTrigger();
 const fireTrigger = useFireTrigger();
 
 const searchKeyword = ref("");
+const selectedKeys = ref<string[]>([]);
 const payloadText = ref("{}");
 const resultText = ref("");
 
@@ -56,7 +58,6 @@ async function handleFire(id: number) {
   try {
     const result = await fireTrigger.execute(id, safePayload());
     resultText.value = JSON.stringify(result, null, 2);
-    message.success("触发成功");
   } catch (e) {
     message.error(e instanceof Error ? e.message : "触发失败");
   }
@@ -72,7 +73,7 @@ async function handleDelete(trigger: any) {
       message.success("已删除");
       await refresh();
     },
-    { action: "删除", showSuccess: true }
+    { action: "删除", showSuccess: false }
   );
 }
 
@@ -86,7 +87,7 @@ async function handleBatchDelete(selectedItems: any[]) {
       message.success(`已删除 ${selectedItems.length} 个触发器`);
       await refresh();
     },
-    { action: "批量删除", showSuccess: true }
+    { action: "批量删除", showSuccess: false }
   );
 }
 
@@ -125,6 +126,7 @@ async function handleBatchExport(selectedItems: any[]) {
       :data="filteredItems"
       :loading="loading"
       v-model:search="searchKeyword"
+      v-model:selectedKeys="selectedKeys"
       @refresh="refresh"
       @batch-delete="handleBatchDelete"
       @batch-export="handleBatchExport"
@@ -143,6 +145,7 @@ async function handleBatchExport(selectedItems: any[]) {
         :bordered="false"
         row-key="id"
         :row-selection="{ type: 'checkbox' }"
+        v-model:selectedKeys="selectedKeys"
       >
         <template #columns>
           <!-- ID -->
@@ -255,7 +258,7 @@ async function handleBatchExport(selectedItems: any[]) {
     </div>
 
     <!-- Test panel (only shown when there are triggers) -->
-    <ui-card v-if="items.length" class="min-w-0 flex-1 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
+    <ui-card v-if="items.length" class="min-w-0 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
       <template #title>
         <div class="flex items-center gap-2">
           <icon-thunderbolt class="h-4 w-4 text-amber-600" />

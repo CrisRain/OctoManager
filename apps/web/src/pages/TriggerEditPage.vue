@@ -1,13 +1,19 @@
 <script setup lang="ts">
-import { ref, reactive, computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { IconEdit } from "@/lib/icons";
 
 import { FormActionBar, FormPageLayout, PageHeader, SmartForm } from "@/components/index";
+import { useJobDefinitions } from "@/composables/useJobs";
 import { useTriggers, usePatchTrigger } from "@/composables/useTriggers";
 import { useMessage, useErrorHandler } from "@/composables";
 import type { FieldConfig } from "@/components/smart-form.types";
 import { to } from "@/router/registry";
+import {
+  formatJobDefinitionOptionLabel,
+  parseTriggerDefaultInput,
+  stringifyTriggerDefaultInput,
+} from "@/utils/triggerForm";
 
 const route = useRoute();
 const router = useRouter();
@@ -16,6 +22,7 @@ const triggerId = Number(route.params.id);
 const message = useMessage();
 const { withErrorHandler } = useErrorHandler();
 const { data: triggers, loading } = useTriggers();
+const { data: definitions } = useJobDefinitions();
 const patch = usePatchTrigger();
 
 const trigger = computed(() => triggers.value.find((t) => t.id === triggerId));
@@ -24,18 +31,46 @@ const formRef = ref<InstanceType<typeof SmartForm>>();
 
 const formData = ref({
   name: "",
+  job_definition_id: "",
   mode: "async",
+  default_input_json: "{}",
   enabled: true,
 });
 
 watch(trigger, (t) => {
   if (!t) return;
   formData.value.name = t.name;
+  formData.value.job_definition_id = String(t.job_definition_id);
   formData.value.mode = t.mode;
+  formData.value.default_input_json = stringifyTriggerDefaultInput(t.default_input);
   formData.value.enabled = t.enabled;
 }, { immediate: true });
 
-const formFields: FieldConfig[] = [
+const jobOptions = computed(() => {
+  const options = definitions.value.map((item) => ({
+    label: formatJobDefinitionOptionLabel(item),
+    value: String(item.id),
+  }));
+
+  if (
+    trigger.value
+    && formData.value.job_definition_id
+    && !options.some((option) => option.value === formData.value.job_definition_id)
+  ) {
+    options.unshift({
+      label: `当前已绑定任务 #${formData.value.job_definition_id}（任务列表中未找到）`,
+      value: formData.value.job_definition_id,
+    });
+  }
+
+  return options;
+});
+
+const selectedDefinition = computed(() =>
+  definitions.value.find((item) => String(item.id) === formData.value.job_definition_id) ?? null,
+);
+
+const formFields = computed<FieldConfig[]>(() => [
   {
     name: "name",
     label: "触发器名称",
@@ -43,6 +78,17 @@ const formFields: FieldConfig[] = [
     placeholder: "例如: GitHub Webhook",
     required: true,
     description: "触发器的显示名称",
+  },
+  {
+    name: "job_definition_id",
+    label: "绑定任务定义",
+    type: "select",
+    placeholder: jobOptions.value.length ? "选择要触发的任务定义" : "暂无任务定义",
+    required: true,
+    description: selectedDefinition.value
+      ? `当前将触发 ${selectedDefinition.value.plugin_key}:${selectedDefinition.value.action}`
+      : "可以切换到新的任务定义",
+    options: jobOptions.value,
   },
   {
     name: "mode",
@@ -55,17 +101,32 @@ const formFields: FieldConfig[] = [
     description: "sync 模式下请求会阻塞直到任务完成",
   },
   {
+    name: "default_input_json",
+    label: "默认输入 (JSON)",
+    type: "textarea",
+    placeholder: "{\"source\":\"github\"}",
+    description: "Webhook 请求体会与这里的默认输入合并；必须是 JSON 对象",
+    rows: 6,
+  },
+  {
     name: "enabled",
     label: "启用触发器",
     type: "switch",
     description: "关闭后此触发器将拒绝所有 Webhook 请求",
   },
-];
+]);
 
 async function handleSave() {
   const isValid = formRef.value?.validate();
   if (!isValid) {
-    message.error("请检查表单填写是否正确");
+    return;
+  }
+
+  let defaultInput: Record<string, unknown> = {};
+  try {
+    defaultInput = parseTriggerDefaultInput(formData.value.default_input_json);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "默认输入格式错误");
     return;
   }
 
@@ -73,7 +134,9 @@ async function handleSave() {
     async () => {
       await patch.execute(triggerId, {
         name: formData.value.name.trim(),
+        job_definition_id: Number(formData.value.job_definition_id),
         mode: formData.value.mode,
+        default_input: defaultInput,
         enabled: formData.value.enabled,
       });
       message.success("触发器已更新");
@@ -136,6 +199,11 @@ async function handleSave() {
             <div class="flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
               <span class="text-xs font-semibold tracking-wider text-slate-500">关联任务定义 ID</span>
               <span class="text-sm font-medium text-slate-700">#{{ trigger?.job_definition_id }}</span>
+            </div>
+            <div v-if="selectedDefinition" class="flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
+              <span class="text-xs font-semibold tracking-wider text-slate-500">当前目标任务</span>
+              <span class="text-sm font-medium text-slate-700">{{ selectedDefinition.name }}</span>
+              <code class="text-xs text-slate-500">{{ selectedDefinition.plugin_key }}:{{ selectedDefinition.action }}</code>
             </div>
             <div class="flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
               <span class="text-xs font-semibold tracking-wider text-slate-500">Token 前缀</span>

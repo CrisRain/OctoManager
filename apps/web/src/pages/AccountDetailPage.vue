@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useAccount } from "@/composables/useAccounts";
 import { useMessage } from "@/composables";
 import { useExecuteAccount } from "@/composables/useAccounts";
@@ -10,6 +12,7 @@ import type {
   AccountExecuteResult,
   PluginUIButton,
   PluginUIFormField,
+  PluginUITab,
 } from "@/types";
 
 const route = useRoute();
@@ -60,8 +63,8 @@ const hasUITabs = computed(() =>
 // Active UI sub-tab (within the Actions tab)
 const activeUITab = ref<string>("");
 
-const pluginActionTabs = computed(() =>
-  (plugin.value?.manifest.ui?.tabs ?? []).filter(tab => tab.context !== "create")
+const pluginActionTabs = computed<PluginUITab[]>(() =>
+  (plugin.value?.manifest.ui?.tabs ?? []).filter((tab) => tab.context !== "create")
 );
 
 watch(
@@ -136,11 +139,6 @@ async function executeButton(button: PluginUIButton) {
     } else {
       const res = await executeAccount.execute(accountId, button.action, params);
       execResults.value[button.action] = res;
-      if (res.status === "ok") {
-        message.success("执行成功");
-      } else {
-        message.warning(`执行失败: ${res.error_message ?? res.error_code}`);
-      }
     }
   } catch (e) {
     message.error(e instanceof Error ? e.message : "执行失败");
@@ -206,11 +204,6 @@ async function handleExecute() {
     } else {
       const res = await executeAccount.execute(accountId, selectedAction.value, params);
       execResult.value = res;
-      if (res.status === "ok") {
-        message.success("执行成功");
-      } else {
-        message.warning(`执行失败: ${res.error_message ?? res.error_code}`);
-      }
     }
   } catch (e) {
     message.error(e instanceof Error ? e.message : "执行失败");
@@ -749,7 +742,7 @@ const selectedActionMeta = computed(() =>
                     <p>请在左侧选择要执行的操作</p>
                   </div>
                   <template v-else>
-                    <ui-card class="min-w-0 flex-1 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
+                    <ui-card class="min-w-0 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
                       <template #title>
                         <div class="flex items-center gap-2">
                           <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600"><icon-code-block /></div>

@@ -154,6 +154,114 @@ func TestAPISystemConfigRequiresAdminKey(t *testing.T) {
 	}
 }
 
+func TestAPIJobDefinitionPatchUpdatesPluginAndAction(t *testing.T) {
+	ctx, rootDir, db := setupIntegrationPrereqs(t)
+	api := startTestAPI(t, ctx, rootDir, db, testAdminKey)
+
+	definition := postJSONWithHeaders[map[string]any](t, api.baseURL+"/api/v2/job-definitions", map[string]any{
+		"key":        "patch-job",
+		"name":       "Patch Job",
+		"plugin_key": "octo_demo",
+		"action":     "LIST_TASKS",
+		"input": map[string]any{
+			"params": map[string]any{
+				"page": "1",
+			},
+		},
+	}, adminHeaders(testAdminKey))
+
+	definitionID := int64(definition["id"].(float64))
+
+	patched := requestJSON[map[string]any](t, http.MethodPatch, fmt.Sprintf("%s/api/v2/job-definitions/%d", api.baseURL, definitionID), map[string]any{
+		"name":       "Patch Job Updated",
+		"plugin_key": "octo_demo",
+		"action":     "CREATE_TASK",
+		"input": map[string]any{
+			"params": map[string]any{
+				"title": "Created from patch",
+			},
+		},
+	}, adminHeaders(testAdminKey), http.StatusOK)
+
+	if patched["name"] != "Patch Job Updated" {
+		t.Fatalf("expected updated job name, got %v", patched["name"])
+	}
+	if patched["plugin_key"] != "octo_demo" {
+		t.Fatalf("expected updated plugin_key, got %v", patched["plugin_key"])
+	}
+	if patched["action"] != "CREATE_TASK" {
+		t.Fatalf("expected updated action, got %v", patched["action"])
+	}
+}
+
+func TestAPITriggerPatchUpdatesJobAndDefaultInput(t *testing.T) {
+	ctx, rootDir, db := setupIntegrationPrereqs(t)
+	api := startTestAPI(t, ctx, rootDir, db, testAdminKey)
+
+	jobA := postJSONWithHeaders[map[string]any](t, api.baseURL+"/api/v2/job-definitions", map[string]any{
+		"key":        "trigger-job-a",
+		"name":       "Trigger Job A",
+		"plugin_key": "octo_demo",
+		"action":     "LIST_TASKS",
+		"input":      map[string]any{},
+	}, adminHeaders(testAdminKey))
+	jobB := postJSONWithHeaders[map[string]any](t, api.baseURL+"/api/v2/job-definitions", map[string]any{
+		"key":        "trigger-job-b",
+		"name":       "Trigger Job B",
+		"plugin_key": "octo_demo",
+		"action":     "CREATE_TASK",
+		"input":      map[string]any{},
+	}, adminHeaders(testAdminKey))
+
+	trigger := postJSONWithHeaders[map[string]any](t, api.baseURL+"/api/v2/triggers", map[string]any{
+		"key":               "patch-trigger",
+		"name":              "Patch Trigger",
+		"job_definition_id": int64(jobA["id"].(float64)),
+		"mode":              "async",
+		"default_input": map[string]any{
+			"source": "before",
+		},
+		"enabled": true,
+	}, adminHeaders(testAdminKey))
+
+	triggerID := int64(trigger["trigger"].(map[string]any)["id"].(float64))
+	jobBID := int64(jobB["id"].(float64))
+
+	patched := requestJSON[map[string]any](t, http.MethodPatch, fmt.Sprintf("%s/api/v2/triggers/%d", api.baseURL, triggerID), map[string]any{
+		"name":              "Patch Trigger Updated",
+		"job_definition_id": jobBID,
+		"mode":              "sync",
+		"default_input": map[string]any{
+			"source": "after",
+			"params": map[string]any{
+				"title": "Created from trigger patch",
+			},
+		},
+		"enabled": false,
+	}, adminHeaders(testAdminKey), http.StatusOK)
+
+	if patched["name"] != "Patch Trigger Updated" {
+		t.Fatalf("expected updated trigger name, got %v", patched["name"])
+	}
+	if int64(patched["job_definition_id"].(float64)) != jobBID {
+		t.Fatalf("expected updated job_definition_id %d, got %v", jobBID, patched["job_definition_id"])
+	}
+	if patched["mode"] != "sync" {
+		t.Fatalf("expected updated trigger mode, got %v", patched["mode"])
+	}
+	if patched["enabled"] != false {
+		t.Fatalf("expected updated enabled flag false, got %v", patched["enabled"])
+	}
+
+	defaultInput, ok := patched["default_input"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected default_input map, got %T", patched["default_input"])
+	}
+	if defaultInput["source"] != "after" {
+		t.Fatalf("expected updated default_input source, got %v", defaultInput["source"])
+	}
+}
+
 func postJSON[T any](t *testing.T, url string, payload any) T {
 	t.Helper()
 	return postJSONWithHeaders[T](t, url, payload, nil)
@@ -316,7 +424,7 @@ func startTestAPI(t *testing.T, ctx context.Context, rootDir string, db *gorm.DB
 	addr := fmt.Sprintf("127.0.0.1:%d", reservePort(t))
 	h := server.New(
 		server.WithHostPorts(addr),
-		server.WithExitWaitTime(1),
+		server.WithExitWaitTime(time.Second),
 	)
 
 	root := h.Group("/")
@@ -443,4 +551,80 @@ func repoRoot(t *testing.T) string {
 		t.Fatal("failed to resolve caller path")
 	}
 	return filepath.Clean(filepath.Join(filepath.Dir(file), "../.."))
+}
+
+func TestResolveStaticFilePrefersBrotliAssets(t *testing.T) {
+	distDir := t.TempDir()
+	assetPath := filepath.Join(distDir, "assets", "app.js")
+	writeTestFile(t, assetPath, []byte("console.log('ok');"))
+	writeTestFile(t, assetPath+".gz", []byte("gzip"))
+	writeTestFile(t, assetPath+".br", []byte("brotli"))
+
+	file, ok := resolveStaticFile(distDir, http.MethodGet, "/assets/app.js", "*/*", "br, gzip")
+	if !ok {
+		t.Fatal("expected static asset to resolve")
+	}
+	if file.diskPath != assetPath+".br" {
+		t.Fatalf("unexpected disk path %q", file.diskPath)
+	}
+	if file.contentEncoding != "br" {
+		t.Fatalf("unexpected content encoding %q", file.contentEncoding)
+	}
+	if file.cacheControl != cacheControlImmutableAssets {
+		t.Fatalf("unexpected cache control %q", file.cacheControl)
+	}
+	if !strings.Contains(file.contentType, "javascript") {
+		t.Fatalf("unexpected content type %q", file.contentType)
+	}
+}
+
+func TestResolveStaticFileUsesSPAIndexForHTMLNavigations(t *testing.T) {
+	distDir := t.TempDir()
+	indexPath := filepath.Join(distDir, "index.html")
+	writeTestFile(t, indexPath, []byte("<!doctype html>"))
+
+	file, ok := resolveStaticFile(distDir, http.MethodGet, "/jobs/42", "text/html,application/xhtml+xml", "gzip")
+	if !ok {
+		t.Fatal("expected SPA fallback to resolve")
+	}
+	if file.diskPath != indexPath {
+		t.Fatalf("unexpected disk path %q", file.diskPath)
+	}
+	if file.cacheControl != cacheControlNoCache {
+		t.Fatalf("unexpected cache control %q", file.cacheControl)
+	}
+}
+
+func TestResolveStaticFileDoesNotFallbackForMissingAssetsOrAPIPaths(t *testing.T) {
+	distDir := t.TempDir()
+	writeTestFile(t, filepath.Join(distDir, "index.html"), []byte("<!doctype html>"))
+
+	if _, ok := resolveStaticFile(distDir, http.MethodGet, "/assets/missing.js", "text/html", "gzip"); ok {
+		t.Fatal("expected missing asset request to return 404")
+	}
+	if _, ok := resolveStaticFile(distDir, http.MethodGet, "/api/v2/unknown", "text/html", "gzip"); ok {
+		t.Fatal("expected api path to return 404")
+	}
+	if _, ok := resolveStaticFile(distDir, http.MethodPost, "/jobs/42", "text/html", "gzip"); ok {
+		t.Fatal("expected non-GET html request to return 404")
+	}
+}
+
+func TestAcceptsEncodingHonorsZeroQuality(t *testing.T) {
+	if acceptsEncoding("br;q=0, gzip;q=1", "br") {
+		t.Fatal("expected brotli with q=0 to be rejected")
+	}
+	if !acceptsEncoding("br;q=0, gzip;q=1", "gzip") {
+		t.Fatal("expected gzip to remain accepted")
+	}
+}
+
+func writeTestFile(t *testing.T, filename string, data []byte) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(filename), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filename, err)
+	}
+	if err := os.WriteFile(filename, data, 0o644); err != nil {
+		t.Fatalf("write %s: %v", filename, err)
+	}
 }

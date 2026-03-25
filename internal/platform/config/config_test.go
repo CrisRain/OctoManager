@@ -1,6 +1,9 @@
 package config
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestLoadUsesDatabaseDSN(t *testing.T) {
 	t.Setenv("DATABASE_DSN", "postgres://octo:octo@localhost:5432/octomanger?sslmode=disable")
@@ -48,5 +51,53 @@ func TestLoadPluginServicesFromEnv(t *testing.T) {
 	}
 	if service.Address != "127.0.0.1:50051" {
 		t.Fatalf("unexpected service address %q", service.Address)
+	}
+}
+
+func TestLoadSupportsLegacyAdminKeyAliases(t *testing.T) {
+	t.Setenv("DATABASE_DSN", "postgres://octo:octo@localhost:5432/octomanger?sslmode=disable")
+	t.Setenv("ADMIN_KEY", "")
+	t.Setenv("X_ADMIN_KEY", "legacy-admin-key")
+	t.Setenv("OCTO_ADMIN_KEY", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	if cfg.Auth.AdminKey != "legacy-admin-key" {
+		t.Fatalf("unexpected admin key %q", cfg.Auth.AdminKey)
+	}
+}
+
+func TestLoadPrefersAdminKeyOverLegacyAliases(t *testing.T) {
+	t.Setenv("DATABASE_DSN", "postgres://octo:octo@localhost:5432/octomanger?sslmode=disable")
+	t.Setenv("ADMIN_KEY", "primary-admin-key")
+	t.Setenv("X_ADMIN_KEY", "legacy-admin-key")
+	t.Setenv("OCTO_ADMIN_KEY", "octo-admin-key")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	if cfg.Auth.AdminKey != "primary-admin-key" {
+		t.Fatalf("unexpected admin key %q", cfg.Auth.AdminKey)
+	}
+}
+
+func TestLoadProvidesDefaultServerTimeouts(t *testing.T) {
+	t.Setenv("DATABASE_DSN", "postgres://octo:octo@localhost:5432/octomanger?sslmode=disable")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	if cfg.Server.ReadTimeout != 15*time.Second {
+		t.Fatalf("unexpected read timeout %s", cfg.Server.ReadTimeout)
+	}
+	if cfg.Server.IdleTimeout != time.Minute {
+		t.Fatalf("unexpected idle timeout %s", cfg.Server.IdleTimeout)
 	}
 }

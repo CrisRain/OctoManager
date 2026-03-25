@@ -50,7 +50,7 @@ async function handleEnqueue() {
         refreshExecutions();
       }, 1000);
     },
-    { action: "执行任务", showSuccess: true }
+    { action: "执行任务", showSuccess: false }
   );
 }
 
@@ -67,7 +67,7 @@ async function deleteJob() {
       message.success(`已删除任务: ${job.value!.name}`);
       router.push(to.jobs.list());
     },
-    { action: "删除", showSuccess: true }
+    { action: "删除", showSuccess: false }
   );
 }
 
@@ -313,4 +313,3 @@ onMounted(() => {
     </div>
   </div>
 </template>
-

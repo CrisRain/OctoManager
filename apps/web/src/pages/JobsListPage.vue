@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import {
   IconSchedule, IconClockCircle, IconHistory, IconPlayArrow,
@@ -18,6 +18,8 @@ const confirm = useConfirm();
 const { withErrorHandler } = useErrorHandler();
 
 const { data: definitions, loading, refresh } = useJobDefinitions();
+const selectedKeys = ref<string[]>([]);
+watch(definitions, () => { selectedKeys.value = []; });
 const enqueue = useEnqueueJobExecution();
 const deleteJobOp = useDeleteJobDefinition();
 
@@ -82,7 +84,7 @@ async function handleEnqueue(id: number) {
       message.success("已加入执行队列");
       await refresh();
     },
-    { action: "执行任务", showSuccess: true }
+    { action: "执行任务", showSuccess: false }
   );
 }
 
@@ -106,7 +108,7 @@ async function deleteJob(job: JobDefinition) {
       await deleteJobOp.execute(job.id);
       message.success(`已删除任务: ${job.name}`);
     },
-    { action: "删除", showSuccess: true }
+    { action: "删除", showSuccess: false }
   );
 }
 
@@ -120,7 +122,7 @@ async function handleBatchDelete(items: JobDefinition[]) {
       await Promise.all(items.map((item) => deleteJobOp.execute(item.id)));
       message.success(`已删除 ${items.length} 个任务`);
     },
-    { action: "批量删除", showSuccess: true }
+    { action: "批量删除", showSuccess: false }
   );
 }
 
@@ -160,6 +162,7 @@ async function handleBatchExport(items: JobDefinition[]) {
       :data="filteredJobs"
       :loading="loading"
       v-model:search="searchKeyword"
+      v-model:selectedKeys="selectedKeys"
       @refresh="refresh"
       @batch-delete="handleBatchDelete"
       @batch-export="handleBatchExport"
@@ -216,6 +219,7 @@ async function handleBatchExport(items: JobDefinition[]) {
         :bordered="false"
         row-key="id"
         :row-selection="{ type: 'checkbox' }"
+        v-model:selectedKeys="selectedKeys"
       >
         <template #columns>
           <!-- ID -->

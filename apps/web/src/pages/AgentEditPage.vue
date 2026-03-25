@@ -104,7 +104,6 @@ const formFields = computed<FieldConfig[]>(() => [
 async function handleSave() {
   const isValid = formRef.value?.validate();
   if (!isValid) {
-    message.error("请检查表单填写是否正确");
     return;
   }
 

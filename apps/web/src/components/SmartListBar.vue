@@ -193,8 +193,8 @@ defineExpose({
       <!-- 操作按钮组 -->
       <div class="flex flex-shrink-0 items-center gap-1">
         <!-- 选中时的批量操作 -->
-        <template v-if="selectedKeys.length > 0">
-          <span class="mr-1 text-xs font-medium text-slate-600" aria-live="polite">{{ selectedKeys.length }} 已选</span>
+        <template v-if="selectedItems.length > 0">
+          <span class="mr-1 text-xs font-medium text-slate-600" aria-live="polite">{{ selectedItems.length }} 已选</span>
           <button type="button" class="rounded-md px-2 py-1 text-xs text-slate-600 hover:text-slate-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50" @click="clearSelection">清空</button>
           <div class="h-4 w-px bg-slate-200 mx-0.5" aria-hidden="true" />
           <!-- h-7 visual + before: 44px 触控区 -->
@@ -268,10 +268,10 @@ defineExpose({
     </div>
 
     <!-- 批量操作栏 (移动端) -->
-    <div v-if="selectedKeys.length > 0" class="mt-2 flex items-center justify-between rounded-xl bg-slate-900 px-4 py-3 text-white shadow-md lg:hidden" role="toolbar" aria-label="批量操作">
+    <div v-if="selectedItems.length > 0" class="mt-2 flex items-center justify-between rounded-xl bg-slate-900 px-4 py-3 text-white shadow-md lg:hidden" role="toolbar" aria-label="批量操作">
       <div class="flex items-center gap-2 text-sm font-medium">
         <icon-check class="h-4 w-4" aria-hidden="true" />
-        <span aria-live="polite">已选择 {{ selectedKeys.length }} 项</span>
+        <span aria-live="polite">已选择 {{ selectedItems.length }} 项</span>
       </div>
       <div class="flex items-center gap-2">
         <button type="button" class="cursor-pointer rounded-lg border-0 bg-white/20 px-3 py-1.5 text-sm font-medium transition-colors hover:bg-white/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50" @click="clearSelection">取消</button>

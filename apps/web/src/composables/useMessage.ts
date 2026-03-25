@@ -5,15 +5,15 @@ import { Message, Notification } from "@/lib/feedback";
  * 提供简单易用的消息提示方法，支持多种类型
  */
 export const useMessage = () => {
-  const success = (content: string, duration = 3000) => {
+  const success = (content: string, duration = 2200) => {
     return Message.success({
       content,
       duration,
-      closable: true,
+      closable: false,
     });
   };
 
-  const error = (content: string, duration = 5000) => {
+  const error = (content: string, duration = 4200) => {
     return Message.error({
       content,
       duration,
@@ -21,19 +21,19 @@ export const useMessage = () => {
     });
   };
 
-  const warning = (content: string, duration = 4000) => {
+  const warning = (content: string, duration = 3200) => {
     return Message.warning({
       content,
       duration,
-      closable: true,
+      closable: false,
     });
   };
 
-  const info = (content: string, duration = 3000) => {
+  const info = (content: string, duration = 2400) => {
     return Message.info({
       content,
       duration,
-      closable: true,
+      closable: false,
     });
   };
 
@@ -60,7 +60,7 @@ export const useMessage = () => {
       Notification.success({
         title,
         content,
-        duration: 3000,
+        duration: 3600,
         closable: true,
       });
     },
@@ -68,7 +68,7 @@ export const useMessage = () => {
       Notification.error({
         title,
         content,
-        duration: 5000,
+        duration: 5200,
         closable: true,
       });
     },
@@ -76,7 +76,7 @@ export const useMessage = () => {
       Notification.warning({
         title,
         content,
-        duration: 4000,
+        duration: 4200,
         closable: true,
       });
     },
@@ -84,7 +84,7 @@ export const useMessage = () => {
       Notification.info({
         title,
         content,
-        duration: 3000,
+        duration: 3600,
         closable: true,
       });
     },

@@ -30,9 +30,11 @@ type CreateResult struct {
 }
 
 type PatchTriggerInput struct {
-	Name    *string `json:"name,omitempty"`
-	Mode    *string `json:"mode,omitempty"`
-	Enabled *bool   `json:"enabled,omitempty"`
+	Name            *string        `json:"name,omitempty"`
+	JobDefinitionID *int64         `json:"job_definition_id,omitempty"`
+	Mode            *string        `json:"mode,omitempty"`
+	DefaultInput    map[string]any `json:"default_input,omitempty"`
+	Enabled         *bool          `json:"enabled,omitempty"`
 }
 
 type FireResult struct {

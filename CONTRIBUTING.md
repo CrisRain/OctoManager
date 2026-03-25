@@ -39,7 +39,7 @@ git clone <repo-url> && cd OctoManger
 
 # 2. 设置必要环境变量
 export DATABASE_DSN="postgres://octo:octo@localhost:5432/octomanger?sslmode=disable"
-export X_ADMIN_KEY="dev-only-key"   # 留空则无鉴权
+export ADMIN_KEY="dev-only-key"     # 留空则无鉴权；兼容旧变量 X_ADMIN_KEY
 
 # 3. 执行数据库自动迁移
 go run ./apps/migrate migrate

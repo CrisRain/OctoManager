@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import { useAccountTypes } from "@/composables";
 import { navRoutes, routeNames, searchRoutes, shortcutRoutes, to, type IconKey } from "@/router/registry";
 import { useCommandPaletteStore } from "@/store/command-palette";
@@ -6,7 +8,7 @@ import { useCommandPaletteStore } from "@/store/command-palette";
 import {
   IconDashboard, IconLayers, IconUser, IconEmail, IconSchedule,
   IconRobot, IconFile, IconApps, IconThunderbolt,
-  IconSettings, IconMenu
+  IconSettings, IconMenu, IconSearch, IconPlus, IconClose
 } from "@/lib/icons";
 
 interface NavChild {
@@ -80,20 +82,90 @@ const navItems = computed<NavItem[]>(() => {
   return baseItems;
 });
 
-const currentTitle = computed(() => {
+const activeNavItem = computed(() => {
   const path = route.path;
-  const topMatch = navItems.value.find(
-    (item) => path === item.to || path.startsWith(`${item.to}/`)
-  );
-  if (!topMatch) return "控制台";
-  const childMatch = topMatch.children?.find(
+  return navItems.value.find((item) => path === item.to || path.startsWith(`${item.to}/`)) ?? null;
+});
+
+const activeNavChild = computed(() => {
+  const path = route.path;
+  return activeNavItem.value?.children?.find(
     (child) => path === child.to || path.startsWith(`${child.to}/`)
-  );
-  return childMatch?.label ?? topMatch.label;
+  ) ?? null;
+});
+
+const currentTitle = computed(() => {
+  return activeNavChild.value?.label ?? activeNavItem.value?.label ?? "控制台";
 });
 
 function closeMobile() {
   mobileOpen.value = false;
+}
+
+const quickCreate = computed(() => {
+  if (route.path.startsWith("/jobs")) {
+    return {
+      label: "新建任务",
+      description: "把一个新的自动化任务接入当前流程",
+      action: () => router.push(to.jobs.create()),
+    };
+  }
+  if (route.path.startsWith("/agents")) {
+    return {
+      label: "新建 Agent",
+      description: "配置一个持续运行的 Agent",
+      action: () => router.push(to.agents.create()),
+    };
+  }
+  if (route.path.startsWith("/triggers")) {
+    return {
+      label: "新建触发器",
+      description: "创建一个新的 Webhook 入口",
+      action: () => router.push(to.triggers.create()),
+    };
+  }
+  if (route.path.startsWith("/email-accounts")) {
+    return {
+      label: "新建邮箱账号",
+      description: "接入新的邮箱账号并开始同步",
+      action: () => router.push(to.emailAccounts.create()),
+    };
+  }
+  if (route.path.startsWith("/account-types")) {
+    return {
+      label: "新建账号类型",
+      description: "定义新的账号类型和字段结构",
+      action: () => router.push(to.accountTypes.create()),
+    };
+  }
+  if (route.path.startsWith("/accounts")) {
+    return {
+      label: "新建账号",
+      description: "添加一个新的账号供任务和 Agent 使用",
+      action: () => router.push(to.accounts.create()),
+    };
+  }
+
+  return {
+    label: "新建账号",
+    description: "从这里开始新增常用资源",
+    action: () => router.push(to.accounts.create()),
+  };
+});
+
+function openCommandSearch() {
+  closeMobile();
+  commandPalette.open();
+}
+
+function handleQuickCreate() {
+  closeMobile();
+  quickCreate.value.action();
+}
+
+function goToSectionRoot() {
+  closeMobile();
+  router.push(activeNavItem.value?.to ?? to.dashboard());
 }
 
 const baseCommands = computed(() => [
@@ -206,23 +278,38 @@ onUnmounted(() => {
 
 <template>
   <div class="flex h-full flex-col bg-white">
-    <header class="sticky top-0 z-40 mx-4 mt-4 lg:hidden">
-      <div class="relative overflow-hidden rounded-lg bg-[var(--sidebar-bg)] px-4 text-white">
-        <div class="absolute -right-6 top-3 h-20 w-20 rounded-full bg-white/10" />
-        <div class="absolute bottom-[-1.75rem] right-10 h-16 w-16 rotate-12 rounded-lg bg-white/12" />
-        <div class="relative flex h-16 items-center gap-3">
-          <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-md bg-white/14 text-white transition-all duration-200 hover:scale-105 hover:bg-white/22 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--sidebar-bg)]" @click="mobileOpen = true">
-            <icon-menu class="h-5 w-5" />
-          </button>
-          <div class="min-w-0 flex-1">
-            <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/72">workspace</div>
-            <span class="block truncate text-[1.05rem] font-extrabold tracking-[-0.02em] text-white">{{ currentTitle }}</span>
-          </div>
-          <div class="flex h-11 w-11 items-center justify-center rounded-md bg-[var(--highlight)] text-[var(--text-primary)]">
-            <icon-layers class="h-5 w-5" />
-          </div>
+    <header class="sticky top-0 z-40 flex items-center gap-2 border-b border-slate-200 bg-white px-4 py-3 lg:hidden">
+      <button
+        type="button"
+        class="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 focus-visible:outline-none"
+        @click="mobileOpen = true"
+      >
+        <icon-menu class="h-5 w-5" />
+      </button>
+
+      <div class="flex min-w-0 flex-1 items-center gap-2">
+        <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--highlight)] text-[var(--text-primary)]">
+          <component :is="activeNavItem?.icon ?? IconLayers" class="h-4 w-4" />
         </div>
+        <span class="truncate text-sm font-semibold text-slate-900">{{ currentTitle }}</span>
       </div>
+
+      <button
+        type="button"
+        class="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 focus-visible:outline-none"
+        @click="openCommandSearch"
+      >
+        <icon-search class="h-4.5 w-4.5" />
+      </button>
+
+      <button
+        type="button"
+        class="inline-flex h-9 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg bg-[var(--accent)] px-3 text-xs font-semibold text-white transition-colors hover:opacity-90 focus-visible:outline-none"
+        @click="handleQuickCreate"
+      >
+        <icon-plus class="h-3.5 w-3.5" />
+        新建
+      </button>
     </header>
 
     <ui-drawer
@@ -231,30 +318,29 @@ onUnmounted(() => {
       :footer="false"
       :header="false"
       popup-container="body"
-      class="[&.ui-drawer]:bg-[var(--sidebar-bg)] [&.ui-drawer]:text-white [&.ui-drawer-body]:p-0"
+      class="[--drawer-inline-size:min(88vw,24rem)] [&.ui-drawer]:bg-[var(--sidebar-bg)] [&.ui-drawer]:text-white [&.ui-drawer-body]:p-0"
       @cancel="closeMobile"
     >
-      <div class="relative flex h-full w-full flex-col overflow-y-auto px-3 py-4">
-        <div class="absolute -left-10 top-8 h-28 w-28 rounded-full bg-white/10" />
-        <div class="absolute bottom-10 right-4 h-24 w-24 rotate-12 rounded-lg bg-white/10" />
-        <div class="relative mb-8 flex items-center gap-3 px-3 py-3">
-          <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--highlight)] text-[var(--text-primary)]">
+      <div class="flex h-full w-full flex-col overflow-y-auto overflow-x-hidden bg-[var(--sidebar-bg)] text-white">
+        <div class="flex items-center gap-3 border-b border-white/12 px-4 py-4">
+          <div class="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--highlight)] text-[var(--text-primary)]">
             <icon-layers class="h-5 w-5" />
           </div>
-          <div>
-            <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/72">control</div>
-            <span class="text-[1.05rem] font-extrabold tracking-[-0.02em] text-white">OctoManager</span>
+          <div class="min-w-0 flex-1">
+            <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/60">control</div>
+            <div class="truncate text-base font-extrabold tracking-[-0.02em] text-white">OctoManager</div>
           </div>
+          <button
+            type="button"
+            class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-white/70 transition-colors hover:bg-white/10 focus-visible:outline-none"
+            @click="closeMobile"
+          >
+            <icon-close class="h-4.5 w-4.5" />
+          </button>
         </div>
-        <div class="relative flex flex-1 flex-col">
-          <AppNavList
-            :items="navItems"
-            @navigate="closeMobile"
-          />
-          <div class="mt-6 rounded-lg bg-white/14 p-4 text-white">
-            <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/72">quick access</div>
-            <div class="mt-2 text-base font-bold tracking-[-0.02em]">Open command search with ⌘K</div>
-          </div>
+
+        <div class="flex-1 overflow-y-auto px-3 py-4">
+          <AppNavList :items="navItems" @navigate="closeMobile" />
         </div>
       </div>
     </ui-drawer>
@@ -264,7 +350,7 @@ onUnmounted(() => {
         <div class="absolute -left-8 top-10 h-28 w-28 rounded-full bg-white/10" />
         <div class="absolute right-4 top-28 h-20 w-20 rotate-12 rounded-lg bg-white/10" />
         <div class="absolute bottom-8 right-[-1.25rem] h-24 w-24 rounded-full bg-white/12" />
-        <div class="relative flex h-full w-full flex-col overflow-y-auto">
+        <div class="relative flex h-full w-full flex-col overflow-y-auto overflow-x-hidden">
           <div class="mb-8 flex items-center gap-3 px-2 py-2">
             <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--highlight)] text-[var(--text-primary)]">
               <icon-layers class="h-5 w-5" />

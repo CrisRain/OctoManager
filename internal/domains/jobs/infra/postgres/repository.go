@@ -123,6 +123,12 @@ func (r Repository) PatchDefinition(ctx context.Context, id int64, input jobdoma
 	if input.Name != nil {
 		current.Name = *input.Name
 	}
+	if input.PluginKey != nil {
+		current.PluginKey = *input.PluginKey
+	}
+	if input.Action != nil {
+		current.Action = *input.Action
+	}
 	if input.Input != nil {
 		current.Input = input.Input
 	}
@@ -138,9 +144,9 @@ func (r Repository) PatchDefinition(ctx context.Context, id int64, input jobdoma
 	txErr := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		result := tx.Exec(`
 			UPDATE job_definitions
-			SET name = $2, input_json = $3, enabled = $4, updated_at = NOW()
+			SET name = $2, plugin_key = $3, action = $4, input_json = $5, enabled = $6, updated_at = NOW()
 			WHERE id = $1`,
-			id, current.Name, inputJSON, current.Enabled,
+			id, current.Name, current.PluginKey, current.Action, inputJSON, current.Enabled,
 		)
 		if result.Error != nil {
 			return fmt.Errorf("patch job definition: %w", result.Error)

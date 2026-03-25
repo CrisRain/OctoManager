@@ -89,7 +89,6 @@ async function handleSubmit() {
   // 验证表单
   const isValid = formRef.value?.validate();
   if (!isValid) {
-    message.error("请检查表单填写是否正确");
     return;
   }
 
@@ -115,7 +114,7 @@ async function handleSubmit() {
       message.success("邮箱账号已创建");
       router.push(to.emailAccounts.list());
     },
-    { action: "创建邮箱账号", showSuccess: true }
+    { action: "创建邮箱账号", showSuccess: false }
   );
 }
 
