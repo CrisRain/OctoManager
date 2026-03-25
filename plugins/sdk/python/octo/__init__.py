@@ -12,6 +12,7 @@ from ._module import Module, ParamSpec, Setting, UIButton, UIField, UISection, U
 from ._request import ModuleRequest, request
 from ._response import error, success
 from ._router import ActionRouter, make_router
+from ._sink import use_sink
 
 __all__ = [
     "ActionRouter",
@@ -38,4 +39,5 @@ __all__ = [
     "request",
     "run_module",
     "success",
+    "use_sink",
 ]

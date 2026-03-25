@@ -1,5 +1,6 @@
 import { client } from "@/shared/api/generated/client";
 import type {
+  EmailAccount,
   EmailAccountCreateInput,
   EmailAccountPatchInput,
   EmailBulkImportInput,
@@ -16,6 +17,9 @@ import type {
 
 export const listEmailAccounts = (): Promise<ListEmailAccountsResponse> =>
   client.listEmailAccounts();
+
+export const getEmailAccount = (id: number): Promise<EmailAccount> =>
+  client.getEmailAccount({ path: { id } });
 
 export const bulkImportEmailAccounts = (
   lines: EmailBulkImportInput["lines"],
@@ -59,6 +63,12 @@ export const getEmailMessage = (
   messageId: string,
 ): Promise<EmailMessageDetail> =>
   client.getEmailMessage({ path: { id, message_id: messageId } });
+
+export const getLatestEmailMessage = (
+  id: number,
+  mailbox?: string,
+): Promise<EmailLatestMessageResult> =>
+  client.getLatestEmailMessage({ path: { id }, query: mailbox ? { mailbox } : undefined });
 
 export const previewEmailMailboxes = (
   payload: EmailPreviewInput,

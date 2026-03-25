@@ -4,13 +4,19 @@
 
 # 编译产物
 bin/
+/api
+/worker
+/migrate
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
 
-# 测试编译产物（注意：*_test.go 源文件不应忽略）
+# 测试相关产物 / 源文件
+*_test.go
+*.spec.*
+*.test.*
 *.test
 *.out
 
@@ -41,6 +47,11 @@ __pycache__/
 venv/
 env/
 ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.python-version
 
 # 打包 / 分发产物
 *.egg-info/
@@ -54,20 +65,37 @@ pip-wheel-metadata/
 # Node / Bun（前端）
 # ============================================================
 
-*.test.js
 # 依赖
 node_modules/
 apps/web/node_modules/
 
 # 构建产物
 apps/web/dist/
+apps/web/coverage/
+apps/web/playwright-report/
+apps/web/test-results/
 
 # TypeScript 编译中间产物
 apps/web/*.tsbuildinfo
+*.tsbuildinfo
 
 # 自动生成的类型声明文件
 apps/web/*.d.ts
 apps/web/src/*.d.ts
+
+# 本地前端缓存 / 临时脚本
+apps/web/.vite/
+apps/web/.cache/
+apps/web/fix-*.js
+apps/web/fix-*.mjs
+apps/web/unify*.js
+apps/web/unify*.mjs
+apps/web/replace.js
+apps/web/test-*.js
+apps/web/test-*.cjs
+apps/web/test-*.mjs
+apps/web/test-*.ts
+apps/web/test-*.tsx
 
 # ============================================================
 # 配置 / 环境变量
@@ -91,6 +119,7 @@ docker-compose.override.yml
 
 *.log
 *.log.*
+.cache/
 logs/
 .tmp/
 tmp/
@@ -102,6 +131,8 @@ docs/images/.edge-profile/
 
 .idea/
 .vscode/
+.claude/
+.codex-tmp/
 *.swp
 *.swo
 *~

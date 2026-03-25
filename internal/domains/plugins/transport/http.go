@@ -3,7 +3,6 @@ package plugintransport
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 
@@ -12,7 +11,9 @@ import (
 
 	accounttypeapp "octomanger/internal/domains/account-types/app"
 	accounttypedomain "octomanger/internal/domains/account-types/domain"
+	plugins "octomanger/internal/domains/plugins"
 	pluginapp "octomanger/internal/domains/plugins/app"
+	plugindomain "octomanger/internal/domains/plugins/domain"
 	"octomanger/internal/platform/auth"
 	"octomanger/internal/platform/httpx"
 )
@@ -25,12 +26,12 @@ type ConfigStore interface {
 
 type Handler struct {
 	adminKey     string
-	service      pluginapp.Service
+	service      plugins.PluginService
 	accountTypes accounttypeapp.Service
 	configs      ConfigStore
 }
 
-func NewHandler(adminKey string, service pluginapp.Service, accountTypes accounttypeapp.Service, configs ConfigStore) Handler {
+func NewHandler(adminKey string, service plugins.PluginService, accountTypes accounttypeapp.Service, configs ConfigStore) Handler {
 	return Handler{adminKey: adminKey, service: service, accountTypes: accountTypes, configs: configs}
 }
 
@@ -41,6 +42,7 @@ func (h Handler) Register(r *route.RouterGroup) {
 	r.POST("/plugins/sync", guard, h.sync)
 	r.GET("/plugins/:key/settings", guard, h.getSettings)
 	r.PUT("/plugins/:key/settings", guard, h.putSettings)
+	r.POST("/plugins/:key/actions/:action", guard, h.executeAction)
 }
 
 func (h Handler) list(ctx context.Context, c *app.RequestContext) {
@@ -98,20 +100,42 @@ func (h Handler) sync(ctx context.Context, c *app.RequestContext) {
 
 func (h Handler) getSettings(ctx context.Context, c *app.RequestContext) {
 	key := c.Param("key")
+
+	if _, err := h.service.Get(ctx, key); err != nil {
+		httpx.NotFound(ctx, c, err.Error())
+		return
+	}
+
 	raw, err := h.configs.GetConfig(ctx, settingsKey(key))
 	if err != nil {
-		if errors.Is(err, fmt.Errorf("config not found")) || err.Error() == "config not found" {
-			c.JSON(http.StatusOK, map[string]any{})
-			return
-		}
 		httpx.InternalServerError(ctx, c, err.Error())
 		return
 	}
-	c.Data(http.StatusOK, "application/json", raw)
+
+	if len(raw) == 0 || string(raw) == "null" {
+		c.JSON(http.StatusOK, map[string]any{})
+		return
+	}
+
+	settings := map[string]any{}
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		httpx.InternalServerError(ctx, c, "invalid plugin settings JSON")
+		return
+	}
+	if settings == nil {
+		settings = map[string]any{}
+	}
+	c.JSON(http.StatusOK, settings)
 }
 
 func (h Handler) putSettings(ctx context.Context, c *app.RequestContext) {
 	key := c.Param("key")
+
+	if _, err := h.service.Get(ctx, key); err != nil {
+		httpx.NotFound(ctx, c, err.Error())
+		return
+	}
+
 	body := c.Request.Body()
 	if len(body) == 0 {
 		body = []byte("{}")
@@ -120,7 +144,22 @@ func (h Handler) putSettings(ctx context.Context, c *app.RequestContext) {
 		httpx.BadRequest(ctx, c, "body must be valid JSON")
 		return
 	}
-	if err := h.configs.SetConfig(ctx, settingsKey(key), json.RawMessage(body)); err != nil {
+
+	var settings map[string]any
+	if err := json.Unmarshal(body, &settings); err != nil {
+		httpx.BadRequest(ctx, c, "body must be a JSON object")
+		return
+	}
+	if settings == nil {
+		settings = map[string]any{}
+	}
+	normalizedBody, err := json.Marshal(settings)
+	if err != nil {
+		httpx.InternalServerError(ctx, c, err.Error())
+		return
+	}
+
+	if err := h.configs.SetConfig(ctx, settingsKey(key), json.RawMessage(normalizedBody)); err != nil {
 		httpx.InternalServerError(ctx, c, err.Error())
 		return
 	}
@@ -129,4 +168,70 @@ func (h Handler) putSettings(ctx context.Context, c *app.RequestContext) {
 
 func settingsKey(pluginKey string) string {
 	return "plugin_settings:" + pluginKey
+}
+
+func (h Handler) executeAction(ctx context.Context, c *app.RequestContext) {
+	key := c.Param("key")
+	action := c.Param("action")
+
+	plugin, err := h.service.Get(ctx, key)
+	if err != nil {
+		httpx.NotFound(ctx, c, err.Error())
+		return
+	}
+	if plugin == nil {
+		httpx.NotFound(ctx, c, "plugin not found")
+		return
+	}
+
+	var payload struct {
+		Params map[string]any `json:"params"`
+		Spec   map[string]any `json:"spec"`
+	}
+	if err := c.BindJSON(&payload); err != nil {
+		httpx.BadRequest(ctx, c, "invalid request body")
+		return
+	}
+
+	req := plugindomain.ExecutionRequest{
+		Action: action,
+		Input: map[string]any{
+			"params": payload.Params,
+			"spec":   payload.Spec,
+		},
+		Mode: "sync",
+	}
+
+	var result plugindomain.ExecutionEvent
+	var resultErr error
+
+	err = h.service.Execute(ctx, key, req, func(event plugindomain.ExecutionEvent) {
+		if event.Type == "result" {
+			result = event
+		} else if event.Type == "error" {
+			resultErr = fmt.Errorf("%s (code: %s)", event.Message, event.Error)
+		}
+	})
+
+	if err != nil {
+		httpx.InternalServerError(ctx, c, err.Error())
+		return
+	}
+
+	if resultErr != nil {
+		httpx.InternalServerError(ctx, c, resultErr.Error())
+		return
+	}
+
+	if result.Type == "result" {
+		c.JSON(http.StatusOK, map[string]any{
+			"message": result.Message,
+			"data":    result.Data,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, map[string]any{
+		"message": "执行成功，但未返回结果",
+	})
 }

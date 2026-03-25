@@ -20,76 +20,97 @@ export function useEventStream(
   const lastHeartbeatAt = ref<number | null>(null);
   const heartbeatPayload = ref<unknown>(null);
 
-  let source: EventSource | null = null;
-  let closed = false;
+  let controller: AbortController | null = null;
 
   function cleanup() {
-    if (source) {
-      source.close();
-      source = null;
+    if (controller) {
+      controller.abort();
+      controller = null;
     }
-    closed = true;
   }
 
-  function connect(streamUrl: string) {
+  async function connect(streamUrl: string) {
     cleanup();
-    closed = false;
+
     lines.value = [];
     status.value = "connecting";
     lastHeartbeatAt.value = null;
     heartbeatPayload.value = null;
 
-    const es = new EventSource(streamUrl);
-    source = es;
+    const ac = new AbortController();
+    controller = ac;
 
-    es.onopen = () => {
-      if (!closed) status.value = "open";
-    };
-
-    es.onerror = () => {
-      if (closed) return;
-      if (es.readyState === EventSource.CLOSED) {
-        status.value = "error";
-        return;
-      }
-      if (es.readyState === EventSource.CONNECTING) {
-        status.value = "connecting";
-        return;
-      }
-      // Keep stream OPEN when receiving SSE payloads whose event type happens to be "error".
-      status.value = "open";
-    };
-
-    es.onmessage = (event: MessageEvent) => {
-      lines.value = [...lines.value, event.data as string].slice(-MAX_LOG_LINES);
-    };
-
-    const trackedEvents = options.eventNames ?? [];
     const closeOnSet = new Set(options.closeOn ?? []);
     const heartbeatSet = new Set(options.heartbeatEvents ?? ["heartbeat"]);
 
-    for (const eventName of trackedEvents) {
-      es.addEventListener(eventName, (event: Event) => {
-        const raw = ((event as MessageEvent).data as string) ?? "";
-        const isHeartbeat = heartbeatSet.has(eventName);
-        if (isHeartbeat) {
-          lastHeartbeatAt.value = Date.now();
+    try {
+      const response = await fetch(streamUrl, { signal: ac.signal });
+
+      if (!response.ok || !response.body) {
+        status.value = "error";
+        return;
+      }
+
+      status.value = "open";
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Split on newlines; keep the last incomplete chunk in the buffer.
+        const newline = buffer.lastIndexOf("\n");
+        if (newline === -1) continue;
+
+        const complete = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+
+        for (const line of complete.split("\n")) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+
+          let event = "";
+          let raw = trimmed;
+
           try {
-            heartbeatPayload.value = JSON.parse(raw);
+            const parsed = JSON.parse(trimmed) as { event?: string; data?: unknown };
+            event = parsed.event ?? "";
+            raw = JSON.stringify(parsed.data ?? parsed);
           } catch {
-            heartbeatPayload.value = raw;
+            // Not valid JSON — treat the whole line as raw data.
           }
-          if (!options.includeHeartbeatInLines) {
+
+          const isHeartbeat = heartbeatSet.has(event);
+          if (isHeartbeat) {
+            lastHeartbeatAt.value = Date.now();
+            try {
+              heartbeatPayload.value = JSON.parse(raw);
+            } catch {
+              heartbeatPayload.value = raw;
+            }
+            if (!options.includeHeartbeatInLines) continue;
+          }
+
+          lines.value = [...lines.value, raw].slice(-MAX_LOG_LINES);
+
+          if (closeOnSet.has(event)) {
+            status.value = "closed";
+            reader.cancel();
             return;
           }
         }
-        lines.value = [...lines.value, raw].slice(-MAX_LOG_LINES);
-        if (closeOnSet.has(eventName)) {
-          status.value = "closed";
-          es.close();
-          closed = true;
-        }
-      });
+      }
+
+      // Stream ended normally.
+      if (status.value === "open") status.value = "closed";
+    } catch (err) {
+      if ((err as Error).name === "AbortError") return;
+      status.value = "error";
     }
   }
 

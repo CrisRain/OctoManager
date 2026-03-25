@@ -3,8 +3,8 @@ import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { IconLayers, IconPlus, IconEdit, IconDelete } from "@/lib/icons";
 
-import { PageHeader, SmartListBar, DetailDrawer } from "@/components/index";
-import { useAccountTypes } from "@/composables/useAccountTypes";
+import { PageHeader, SmartListBar } from "@/components/index";
+import { useAccountTypes, useDeleteAccountType } from "@/composables/useAccountTypes";
 import { useMessage, useConfirm, useErrorHandler } from "@/composables";
 import { to } from "@/router/registry";
 
@@ -14,6 +14,7 @@ const confirm = useConfirm();
 const { withErrorHandler } = useErrorHandler();
 
 const { data: items, loading, refresh } = useAccountTypes();
+const deleteAccountTypeOp = useDeleteAccountType();
 
 // 分类筛选
 const categoryFilter = ref<string>();
@@ -47,8 +48,9 @@ const filteredItems = computed(() => {
 
 // 打开详情
 function openDetail(item: any) {
-  selectedItem.value = item;
-  drawerVisible.value = true;
+  // Replace drawer with route navigation if a detail page exists, or leave it for now
+  // Assuming no detail page exists for AccountTypes, we'll keep the edit page as primary action
+  router.push(to.accountTypes.edit(item.key));
 }
 
 // 关闭详情
@@ -83,7 +85,7 @@ async function deleteAccountType(item: any) {
 
   await withErrorHandler(
     async () => {
-      // TODO: 调用删除API
+      await deleteAccountTypeOp.execute(item.key);
       message.success(`已删除账号类型: ${item.name}`);
       await refresh();
     },
@@ -100,7 +102,7 @@ async function handleBatchDelete(items: any[]) {
 
   await withErrorHandler(
     async () => {
-      // TODO: 调用批量删除API
+      await Promise.all(items.map((item) => deleteAccountTypeOp.execute(item.key)));
       message.success(`已删除 ${items.length} 个账号类型`);
       await refresh();
     },
@@ -173,7 +175,7 @@ async function handleBatchDelete(items: any[]) {
             <icon-layers />
           </div>
           <div class="min-w-0 flex-1">
-            <code class="block truncate font-mono text-[11px] text-slate-400">{{ item.key }}</code>
+            <code class="block truncate font-mono text-[11px] text-slate-400">#{{ item.id }} · {{ item.key }}</code>
             <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
               {{ item.category === 'generic' ? '通用' : item.category === 'email' ? '邮箱' : '系统' }}
             </span>
@@ -209,61 +211,5 @@ async function handleBatchDelete(items: any[]) {
         </ui-empty>
       </ui-card>
     </div>
-
-    <!-- 详情抽屉 -->
-    <DetailDrawer
-      v-model:open="drawerVisible"
-      :title="selectedItem?.name"
-      :loading="drawerLoading"
-      @close="closeDetail"
-    >
-      <template v-if="selectedItem" #detail>
-        <div class="rounded-xl border p-4 border-slate-200 bg-white/[56%]">
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">类型标识</span>
-            <code class="text-sm font-medium text-slate-900 mono">{{ selectedItem.key }}</code>
-          </div>
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">分类</span>
-            <span class="text-sm font-medium text-slate-900">
-              {{ selectedItem.category === 'generic' ? '通用' : selectedItem.category === 'email' ? '邮箱' : '系统' }}
-            </span>
-          </div>
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">字段数量</span>
-            <span class="text-sm font-medium text-slate-900">{{ Object.keys(selectedItem.schema || {}).length }} 个</span>
-          </div>
-        </div>
-
-        <div v-if="selectedItem.description" class="rounded-xl border p-4 border-slate-200 bg-white/[56%]">
-          <h4 class="text-[15px] font-semibold text-slate-900">描述</h4>
-          <p class="mt-2 text-sm leading-6 text-slate-600">{{ selectedItem.description }}</p>
-        </div>
-
-        <div v-if="selectedItem.schema && Object.keys(selectedItem.schema).length" class="rounded-xl border p-4 border-slate-200 bg-white/[56%]">
-          <h4 class="text-[15px] font-semibold text-slate-900">字段定义</h4>
-          <div class="mt-3 flex flex-col gap-2">
-            <div v-for="(field, key) in selectedItem.schema" :key="key" class="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
-              <div class="flex flex-wrap items-center gap-2">
-                <code class="text-xs font-mono font-semibold text-slate-700">{{ key }}</code>
-                <span class="inline-flex items-center rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-500">{{ field.type || 'string' }}</span>
-              </div>
-              <p v-if="field.description" class="mt-1.5 text-xs leading-relaxed text-slate-500">{{ field.description }}</p>
-            </div>
-          </div>
-        </div>
-      </template>
-
-      <template #footer>
-        <ui-button @click="closeDetail">关闭</ui-button>
-        <ui-button
-          type="primary"
-          @click="selectedItem && router.push(to.accountTypes.edit(selectedItem.key))"
-        >
-          <template #icon><icon-edit /></template>
-          编辑
-        </ui-button>
-      </template>
-    </DetailDrawer>
   </div>
 </template>

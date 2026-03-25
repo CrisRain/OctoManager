@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { createTrigger, deleteTrigger, fireTrigger, listTriggers } from "@/api";
-import type { Trigger, TriggerCreateInput, TriggerFireInput, TriggerFireResult } from "@/types";
+import { createTrigger, deleteTrigger, fireTrigger, listTriggers, patchTrigger } from "@/api";
+import type { Trigger, TriggerCreateInput, TriggerFireInput, TriggerFireResult, TriggerPatchInput } from "@/types";
 import { normalizeListResponse } from "@/utils/normalizeListResponse";
 
 export const useTriggersStore = defineStore("triggers", () => {
@@ -27,6 +27,12 @@ export const useTriggersStore = defineStore("triggers", () => {
     return result;
   }
 
+  async function update(id: number, payload: TriggerPatchInput) {
+    const result = await patchTrigger(id, payload);
+    triggers.value = triggers.value.map((t) => (t.id === id ? result : t));
+    return result;
+  }
+
   async function remove(id: number) {
     await deleteTrigger(id);
     triggers.value = triggers.value.filter((item) => item.id !== id);
@@ -42,6 +48,7 @@ export const useTriggersStore = defineStore("triggers", () => {
     error,
     fetchTriggers,
     create,
+    update,
     remove,
     fire,
   };

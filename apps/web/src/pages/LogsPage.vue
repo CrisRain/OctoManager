@@ -114,8 +114,8 @@ function dotClass(state: string | undefined) { return agentDot[state ?? ""] ?? "
               type="button"
               v-for="ex in executions"
               :key="ex.id"
-              class="rounded-xl border border-transparent p-3.5 text-left bg-slate-50 [transition-property:background-color,_border-color,_box-shadow,_transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/20 hover:border-slate-200 hover:bg-white hover:-translate-y-px"
-              :class="{ 'border-blue-500/[18%] bg-white/[86%] shadow-sm': selectedExecId === ex.id }"
+              class="rounded-xl border border-transparent p-3.5 text-left bg-slate-50 [transition-property:background-color,_border-color,_box-shadow,_transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 hover:border-slate-200 hover:bg-white hover:-translate-y-px"
+              :class="{ 'border-blue-500/20 bg-white/85 shadow-sm': selectedExecId === ex.id }"
               @click="selectExecution(ex.id)"
             >
               <div class="flex items-center justify-between gap-3">
@@ -131,7 +131,7 @@ function dotClass(state: string | undefined) { return agentDot[state ?? ""] ?? "
           </div>
 
           <!-- Right: terminal -->
-          <div v-if="!selectedExecId" class="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed text-center text-slate-500 border-slate-200 bg-white/[56%]">
+          <div v-if="!selectedExecId" class="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed text-center text-slate-500 border-slate-200 bg-white/55">
             <icon-schedule class="mb-2 h-10 w-10 text-slate-400" />
             <p>选择左侧的执行记录查看日志</p>
           </div>
@@ -160,8 +160,8 @@ function dotClass(state: string | undefined) { return agentDot[state ?? ""] ?? "
               type="button"
               v-for="ag in agents"
               :key="ag.id"
-              class="rounded-xl border border-transparent p-3.5 text-left bg-slate-50 [transition-property:background-color,_border-color,_box-shadow,_transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/20 hover:border-slate-200 hover:bg-white hover:-translate-y-px"
-              :class="{ 'border-blue-500/[18%] bg-white/[86%] shadow-sm': selectedAgentId === ag.id }"
+              class="rounded-xl border border-transparent p-3.5 text-left bg-slate-50 [transition-property:background-color,_border-color,_box-shadow,_transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 hover:border-slate-200 hover:bg-white hover:-translate-y-px"
+              :class="{ 'border-blue-500/20 bg-white/85 shadow-sm': selectedAgentId === ag.id }"
               @click="selectAgent(ag.id)"
             >
               <div class="flex items-center justify-between gap-3">
@@ -189,7 +189,7 @@ function dotClass(state: string | undefined) { return agentDot[state ?? ""] ?? "
           </div>
 
           <!-- Right: terminal -->
-          <div v-if="!selectedAgentId" class="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed text-center text-slate-500 border-slate-200 bg-white/[56%]">
+          <div v-if="!selectedAgentId" class="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-xl border border-dashed text-center text-slate-500 border-slate-200 bg-white/55">
             <icon-robot class="mb-2 h-10 w-10 text-slate-400" />
             <p>选择左侧的 Agent 查看实时事件流</p>
           </div>

@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { createAgent, getAgentStatus, listAgents, startAgent, stopAgent } from "@/api";
-import type { Agent, AgentCreateInput, AgentStatus } from "@/types";
+import { createAgent, deleteAgent, getAgentStatus, listAgents, patchAgent as apiPatchAgent, startAgent, stopAgent } from "@/api";
+import type { Agent, AgentCreateInput, AgentPatchInput, AgentStatus } from "@/types";
 import { normalizeListResponse } from "@/utils/normalizeListResponse";
 
 export const useAgentsStore = defineStore("agents", () => {
@@ -42,6 +42,12 @@ export const useAgentsStore = defineStore("agents", () => {
     return result;
   }
 
+  async function update(id: number, payload: AgentPatchInput) {
+    const result = await apiPatchAgent(id, payload);
+    agents.value = agents.value.map((a) => (a.id === id ? result : a));
+    return result;
+  }
+
   async function start(id: number) {
     await startAgent(id);
     patchAgent(id, { desired_state: "running" });
@@ -59,6 +65,11 @@ export const useAgentsStore = defineStore("agents", () => {
     return status;
   }
 
+  async function remove(id: number) {
+    await deleteAgent(id);
+    agents.value = agents.value.filter((a) => a.id !== id);
+  }
+
   return {
     agents,
     statuses,
@@ -67,8 +78,10 @@ export const useAgentsStore = defineStore("agents", () => {
     patchAgent,
     fetchAgents,
     create,
+    update,
     start,
     stop,
     fetchStatus,
+    remove,
   };
 });

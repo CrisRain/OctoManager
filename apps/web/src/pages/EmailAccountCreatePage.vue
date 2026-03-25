@@ -3,7 +3,7 @@ import { reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { IconEmail, IconPlus } from "@/lib/icons";
 
-import { PageHeader, SmartForm } from "@/components/index";
+import { FormActionBar, FormPageLayout, PageHeader, SmartForm } from "@/components/index";
 import { useCreateEmailAccount } from "@/composables/useEmailAccounts";
 import { useMessage, useErrorHandler } from "@/composables";
 import type { FieldConfig } from "@/components/smart-form.types";
@@ -18,7 +18,7 @@ const create = useCreateEmailAccount();
 const formRef = ref<InstanceType<typeof SmartForm>>();
 
 // 表单数据
-const formData = reactive({
+const formData = ref({
   address: "",
   provider: "outlook",
   status: "active",
@@ -96,13 +96,13 @@ async function handleSubmit() {
   await withErrorHandler(
     async () => {
       await create.execute({
-        address: formData.address.trim(),
-        provider: formData.provider,
-        status: formData.status,
+        address: formData.value.address.trim(),
+        provider: formData.value.provider,
+        status: formData.value.status,
         config: {
-          tenant: formData.tenant,
-          redirect_uri: formData.redirect_uri,
-          mailbox: formData.mailbox,
+          tenant: formData.value.tenant,
+          redirect_uri: formData.value.redirect_uri,
+          mailbox: formData.value.mailbox,
           scope: [
             "offline_access",
             "openid",
@@ -126,7 +126,7 @@ function handleCancel() {
 </script>
 
 <template>
-  <div class="page-shell email-account-create-page">
+  <div class="page-shell">
     <PageHeader
       title="创建邮箱账号"
       subtitle="创建一个新的邮箱账号"
@@ -138,92 +138,93 @@ function handleCancel() {
       <template #icon><icon-email /></template>
     </PageHeader>
 
-    <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,_1.45fr)_minmax(16em,_0.85fr)]">
-      <!-- 表单卡片 -->
-      <ui-card class="min-w-0">
-        <template #title>
-          <div class="flex items-center gap-2">
-            <icon-email class="h-5 w-5 text-[var(--accent)]" />
-            <span>基本信息</span>
-          </div>
-        </template>
+    <FormPageLayout>
+      <template #main>
+        <ui-card class="min-w-0">
+          <template #title>
+            <div class="flex items-center gap-2">
+              <icon-email class="h-5 w-5 text-[var(--accent)]" />
+              <span>基本信息</span>
+            </div>
+          </template>
 
-        <SmartForm
-          ref="formRef"
-          v-model="formData"
-          :fields="formFields"
+          <SmartForm
+            ref="formRef"
+            v-model="formData"
+            :fields="formFields"
+          />
+        </ui-card>
+      </template>
+
+      <template #aside>
+        <ui-card class="min-w-0 lg:sticky lg:top-[var(--space-6)]">
+          <template #title>
+            <div class="flex items-center gap-2">
+              <icon-info-circle class="h-5 w-5 text-[var(--accent)]" />
+              <span>配置说明</span>
+            </div>
+          </template>
+
+          <div class="flex flex-col gap-4">
+            <h4 class="text-sm font-semibold text-slate-900">支持的邮箱服务商</h4>
+            <div class="flex flex-col gap-3">
+              <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold text-slate-700 border-slate-200 bg-slate-50 shadow-sm">O</div>
+                <div>
+                  <div class="text-sm font-semibold text-slate-900">Outlook</div>
+                  <div class="text-xs leading-5 text-slate-500">Microsoft Outlook / Office 365</div>
+                </div>
+              </div>
+              <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold text-slate-700 border-slate-200 bg-slate-50 shadow-sm">G</div>
+                <div>
+                  <div class="text-sm font-semibold text-slate-900">Gmail</div>
+                  <div class="text-xs leading-5 text-slate-500">Google Gmail (即将支持)</div>
+                </div>
+              </div>
+              <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold text-slate-700 border-slate-200 bg-slate-50 shadow-sm">I</div>
+                <div>
+                  <div class="text-sm font-semibold text-slate-900">IMAP</div>
+                  <div class="text-xs leading-5 text-slate-500">通用 IMAP 协议 (即将支持)</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
+              <h4 class="mb-3 text-sm font-semibold text-slate-900">配置步骤</h4>
+              <ol class="pl-5 text-sm leading-7 text-slate-600 list-decimal">
+                <li>填写邮箱地址和选择服务商</li>
+                <li>设置初始状态（通常为"待验证"）</li>
+                <li>配置 OAuth 回调地址</li>
+                <li>保存后进行 OAuth 授权</li>
+                <li>授权完成后状态自动更新为"已激活"</li>
+              </ol>
+            </div>
+
+            <div class="rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
+              <h4 class="mb-3 text-sm font-semibold text-slate-900">注意事项</h4>
+              <ul class="pl-5 text-sm leading-7 text-slate-600 list-disc">
+                <li>回调地址必须与在邮箱服务商处注册的地址一致</li>
+                <li>租户ID (Tenant) 通常使用 "common" 即可</li>
+                <li>默认邮箱文件夹为 "Inbox"</li>
+                <li>需要先在 Azure AD 中注册应用程序</li>
+              </ul>
+            </div>
+          </div>
+        </ui-card>
+      </template>
+
+      <template #actions>
+        <FormActionBar
+          cancel-text="取消"
+          submit-text="创建邮箱账号"
+          submit-loading-text="创建中…"
+          :submit-loading="create.loading.value"
+          @cancel="handleCancel"
+          @submit="handleSubmit"
         />
-      </ui-card>
-
-      <!-- 说明卡片 -->
-      <ui-card class="min-w-0 lg:sticky lg:top-[var(--space-6)]">
-        <template #title>
-          <div class="flex items-center gap-2">
-            <icon-info-circle class="h-5 w-5 text-[var(--accent)]" />
-            <span>配置说明</span>
-          </div>
-        </template>
-
-        <div class="flex flex-col gap-4">
-          <h4 class="text-sm font-semibold text-slate-900">支持的邮箱服务商</h4>
-          <div class="flex flex-col gap-3">
-            <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
-              <div class="flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold text-slate-700 border-slate-200 bg-slate-50 shadow-sm">O</div>
-              <div>
-                <div class="text-sm font-semibold text-slate-900">Outlook</div>
-                <div class="text-xs leading-5 text-slate-500">Microsoft Outlook / Office 365</div>
-              </div>
-            </div>
-            <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
-              <div class="flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold text-slate-700 border-slate-200 bg-slate-50 shadow-sm">G</div>
-              <div>
-                <div class="text-sm font-semibold text-slate-900">Gmail</div>
-                <div class="text-xs leading-5 text-slate-500">Google Gmail (即将支持)</div>
-              </div>
-            </div>
-            <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
-              <div class="flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-bold text-slate-700 border-slate-200 bg-slate-50 shadow-sm">I</div>
-              <div>
-                <div class="text-sm font-semibold text-slate-900">IMAP</div>
-                <div class="text-xs leading-5 text-slate-500">通用 IMAP 协议 (即将支持)</div>
-              </div>
-            </div>
-          </div>
-
-          <h4 class="text-sm font-semibold text-slate-900">配置步骤</h4>
-          <ol class="pl-5 text-sm leading-7 text-slate-600">
-            <li>填写邮箱地址和选择服务商</li>
-            <li>设置初始状态（通常为"待验证"）</li>
-            <li>配置 OAuth 回调地址</li>
-            <li>保存后进行 OAuth 授权</li>
-            <li>授权完成后状态自动更新为"已激活"</li>
-          </ol>
-
-          <h4 class="text-sm font-semibold text-slate-900">注意事项</h4>
-          <ul class="pl-5 text-sm leading-7 text-slate-600">
-            <li>回调地址必须与在邮箱服务商处注册的地址一致</li>
-            <li>租户ID (Tenant) 通常使用 "common" 即可</li>
-            <li>默认邮箱文件夹为 "Inbox"</li>
-            <li>需要先在 Azure AD 中注册应用程序</li>
-          </ul>
-        </div>
-      </ui-card>
-    </div>
-
-    <!-- 底部操作栏 -->
-    <div class="flex items-center justify-end gap-3 rounded-xl border px-5 py-4 sticky bottom-[var(--space-4)] z-10 border-slate-200 bg-slate-50 shadow-sm backdrop-blur-xl backdrop-saturate-150 max-md:flex-col max-md:items-stretch max-md:bottom-[var(--space-3)]">
-      <ui-button size="large" @click="handleCancel">
-        取消
-      </ui-button>
-      <ui-button
-        type="primary"
-        size="large"
-        :loading="create.loading.value"
-        @click="handleSubmit"
-      >
-        <template #icon><icon-check /></template>
-        {{ create.loading.value ? "创建中..." : "创建邮箱账号" }}
-      </ui-button>
-    </div>
+      </template>
+    </FormPageLayout>
   </div>
 </template>

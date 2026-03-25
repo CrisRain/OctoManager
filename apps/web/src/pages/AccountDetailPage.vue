@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { useAccounts } from "@/composables/useAccounts";
+import { useAccount } from "@/composables/useAccounts";
 import { useMessage } from "@/composables";
 import { useExecuteAccount } from "@/composables/useAccounts";
 import { usePlugins } from "@/composables/usePlugins";
+import { useCreateJobDefinition, useEnqueueJobExecution } from "@/composables/useJobs";
+import { useCreateAgent } from "@/composables/useAgents";
 import { to } from "@/router/registry";
 import type {
   AccountExecuteResult,
@@ -15,11 +17,12 @@ const router = useRouter();
 const accountId = Number(route.params.id);
 const message = useMessage();
 
-const { data: accounts, loading } = useAccounts();
+const { data: account, loading } = useAccount(accountId);
 const { data: plugins } = usePlugins();
 const executeAccount = useExecuteAccount();
-
-const account = computed(() => accounts.value.find((a) => a.id === accountId) ?? null);
+const createJobDefinition = useCreateJobDefinition();
+const enqueueJobExecution = useEnqueueJobExecution();
+const createAgent = useCreateAgent();
 
 const plugin = computed(() => {
   if (!account.value?.account_type_key) return null;
@@ -108,12 +111,36 @@ async function executeButton(button: PluginUIButton) {
       ...button.params,
       ...formValues.value[button.action],
     };
-    const res = await executeAccount.execute(accountId, button.action, params);
-    execResults.value[button.action] = res;
-    if (res.status === "ok") {
-      message.success("执行成功");
+
+    if (button.mode === "job") {
+      const jobKey = `${plugin.value!.manifest.key}-${button.action.toLowerCase()}-${Date.now()}`;
+      const jobDef = await createJobDefinition.execute({
+        key: jobKey,
+        name: `${button.label} (${account.value.identifier})`,
+        plugin_key: plugin.value!.manifest.key,
+        action: button.action,
+        input: { params, account: { id: account.value.id, identifier: account.value.identifier, spec: account.value.spec } },
+      });
+      const exec = await enqueueJobExecution.execute(jobDef.id);
+      message.success(`已提交后台作业：${button.label}`);
+      router.push(to.jobs.executionDetail(exec.id));
+    } else if (button.mode === "agent") {
+      const agent = await createAgent.execute({
+        name: `${button.label} (${account.value.identifier})`,
+        plugin_key: plugin.value!.manifest.key,
+        action: button.action,
+        input: { params, account: { id: account.value.id, identifier: account.value.identifier, spec: account.value.spec } },
+      });
+      message.success(`已创建常驻任务：${button.label}`);
+      router.push(to.agents.detail(agent.id));
     } else {
-      message.warning(`执行失败: ${res.error_message ?? res.error_code}`);
+      const res = await executeAccount.execute(accountId, button.action, params);
+      execResults.value[button.action] = res;
+      if (res.status === "ok") {
+        message.success("执行成功");
+      } else {
+        message.warning(`执行失败: ${res.error_message ?? res.error_code}`);
+      }
     }
   } catch (e) {
     message.error(e instanceof Error ? e.message : "执行失败");
@@ -149,13 +176,41 @@ async function handleExecute() {
     paramsError.value = "参数必须是合法 JSON";
     return;
   }
+  
+  const actionMeta = plugin.value?.manifest.actions.find((a) => a.key === selectedAction.value);
+  const modes = actionMeta?.modes || ["sync"];
+  const mode = modes.includes("job") ? "job" : modes.includes("agent") ? "agent" : "sync";
+
   try {
-    const res = await executeAccount.execute(accountId, selectedAction.value, params);
-    execResult.value = res;
-    if (res.status === "ok") {
-      message.success("执行成功");
+    if (mode === "job") {
+      const jobKey = `${plugin.value!.manifest.key}-${selectedAction.value.toLowerCase()}-${Date.now()}`;
+      const jobDef = await createJobDefinition.execute({
+        key: jobKey,
+        name: `${selectedAction.value} (${account.value.identifier})`,
+        plugin_key: plugin.value!.manifest.key,
+        action: selectedAction.value,
+        input: { params, account: { id: account.value.id, identifier: account.value.identifier, spec: account.value.spec } },
+      });
+      const exec = await enqueueJobExecution.execute(jobDef.id);
+      message.success(`已提交后台作业：${selectedAction.value}`);
+      router.push(to.jobs.executionDetail(exec.id));
+    } else if (mode === "agent") {
+      const agent = await createAgent.execute({
+        name: `${selectedAction.value} (${account.value.identifier})`,
+        plugin_key: plugin.value!.manifest.key,
+        action: selectedAction.value,
+        input: { params, account: { id: account.value.id, identifier: account.value.identifier, spec: account.value.spec } },
+      });
+      message.success(`已创建常驻任务：${selectedAction.value}`);
+      router.push(to.agents.detail(agent.id));
     } else {
-      message.warning(`执行失败: ${res.error_message ?? res.error_code}`);
+      const res = await executeAccount.execute(accountId, selectedAction.value, params);
+      execResult.value = res;
+      if (res.status === "ok") {
+        message.success("执行成功");
+      } else {
+        message.warning(`执行失败: ${res.error_message ?? res.error_code}`);
+      }
     }
   } catch (e) {
     message.error(e instanceof Error ? e.message : "执行失败");
@@ -230,7 +285,7 @@ const selectedActionMeta = computed(() =>
       </template>
       <template #actions>
         <div v-if="account" class="flex items-center gap-3 flex-wrap justify-end gap-2">
-          <div class="inline-flex items-center gap-1.5">
+          <div class="inline-flex items-center gap-2">
             <span class="inline-block h-2 w-2 flex-shrink-0 rounded-full transition-colors" :class="statusDot[account.status] ?? 'neutral'" />
             <ui-tag :color="statusColor[account.status] ?? 'gray'">{{ account.status }}</ui-tag>
           </div>
@@ -259,19 +314,19 @@ const selectedActionMeta = computed(() =>
           <p class="text-sm text-slate-500">{{ overviewDescription }}</p>
 
           <div class="flex flex-wrap items-center gap-2">
-            <div class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm border-slate-200 bg-slate-50">
+            <div class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm border-slate-200 bg-slate-50">
               <span class="inline-block h-2 w-2 flex-shrink-0 rounded-full transition-colors" :class="statusDot[account.status] ?? 'neutral'" />
               <ui-tag :color="statusColor[account.status] ?? 'gray'">
                 {{ account.status }}
               </ui-tag>
             </div>
 
-            <div class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs text-slate-500 border-slate-200 bg-slate-50">
+            <div class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs text-slate-500 border-slate-200 bg-slate-50">
               <span>账号类型</span>
               <code class="text-xs font-semibold text-slate-900 font-[var(--font-mono)]">{{ account.account_type_key || "—" }}</code>
             </div>
 
-            <div class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs text-slate-500 border-slate-200 bg-slate-50">
+            <div class="inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs text-slate-500 border-slate-200 bg-slate-50">
               <span>标签预览</span>
               <span class="font-medium text-slate-900">{{ overviewTagPreview }}</span>
             </div>
@@ -326,13 +381,13 @@ const selectedActionMeta = computed(() =>
               <ui-card class="min-w-0 flex-1">
                 <template #title>
                   <div class="flex items-center gap-2">
-                    <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--accent)]/10 text-[var(--accent)]"><icon-info-circle /></div>
+                    <icon-info-circle class="h-4 w-4 text-[var(--accent)]" />
                     基本信息与状态
                   </div>
                 </template>
                 <div class="flex flex-col gap-5">
                   <section class="mb-5 flex flex-col gap-4 rounded-xl border p-5 md:flex-row md:items-center md:justify-between border-slate-200 bg-slate-50">
-                    <div class="flex flex-1 flex-col gap-1.5">
+                    <div class="flex flex-1 flex-col gap-2">
                       <span class="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">Account Profile</span>
                       <h3 class="m-0 text-base font-bold text-slate-900">{{ account.identifier }}</h3>
                       <p class="text-xs leading-relaxed text-slate-500">
@@ -343,7 +398,7 @@ const selectedActionMeta = computed(() =>
 
                     <div class="flex flex-shrink-0 flex-col items-center gap-1 text-center">
                       <span class="text-xs text-slate-500">运行状态</span>
-                      <div class="inline-flex items-center gap-1.5">
+                      <div class="inline-flex items-center gap-2">
                         <span class="inline-block h-2 w-2 flex-shrink-0 rounded-full transition-colors" :class="statusDot[account.status] ?? 'neutral'" />
                         <ui-tag :color="statusColor[account.status] ?? 'gray'">{{ account.status }}</ui-tag>
                       </div>
@@ -382,7 +437,7 @@ const selectedActionMeta = computed(() =>
                       <span class="text-xs text-slate-500">Tags / Labels</span>
                     </div>
 
-                    <div v-if="account.tags?.length" class="flex flex-wrap items-center gap-1 gap-1.5">
+                    <div v-if="account.tags?.length" class="flex flex-wrap items-center gap-1 gap-2">
                       <ui-tag v-for="tag in account.tags" :key="tag">
                         {{ tag }}
                       </ui-tag>
@@ -397,13 +452,13 @@ const selectedActionMeta = computed(() =>
               <ui-card v-if="specEntries.length" class="min-w-0 flex-1">
                 <template #title>
                   <div class="flex items-center gap-2">
-                    <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-orange-50 text-orange-600"><icon-lock /></div>
+                    <icon-lock class="h-4 w-4 text-orange-600" />
                     凭据密钥与 Spec 结构
                   </div>
                 </template>
                 <div class="flex flex-col gap-4">
                   <section class="mb-5 flex flex-col gap-4 rounded-xl border p-5 md:flex-row md:items-center md:justify-between border-slate-200 bg-slate-50">
-                    <div class="flex flex-1 flex-col gap-1.5">
+                    <div class="flex flex-1 flex-col gap-2">
                       <span class="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">Credential Payload</span>
                       <h3 class="m-0 text-base font-bold text-slate-900">Spec 结构映射</h3>
                       <p class="text-xs leading-relaxed text-slate-500">
@@ -443,7 +498,7 @@ const selectedActionMeta = computed(() =>
               <ui-card v-else class="min-w-0 flex-1">
                 <template #title>
                   <div class="flex items-center gap-2">
-                    <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500"><icon-lock /></div>
+                    <icon-lock class="h-4 w-4 text-slate-500" />
                     凭据密钥与 Spec 结构
                   </div>
                 </template>
@@ -470,7 +525,7 @@ const selectedActionMeta = computed(() =>
 
             <template v-else>
               <section class="mb-5 flex flex-col items-start gap-4 rounded-xl border p-5 sm:flex-row border-slate-200 bg-slate-50 shadow-sm">
-                <div class="flex flex-1 flex-col gap-1.5">
+                <div class="flex flex-1 flex-col gap-2">
                   <span class="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">Action Workbench</span>
                   <h3 class="m-0 text-base font-bold text-slate-900">账号操作面板</h3>
                   <p class="text-xs leading-relaxed text-slate-500">
@@ -508,7 +563,7 @@ const selectedActionMeta = computed(() =>
                     >
                       <div class="p-5">
                         <section class="mb-5 flex flex-col items-start gap-4 rounded-xl border p-4 sm:flex-row border-slate-200 bg-slate-50">
-                          <div class="flex flex-1 flex-col gap-1.5">
+                          <div class="flex flex-1 flex-col gap-2">
                             <span class="text-xs font-semibold uppercase tracking-wider text-[var(--accent)]">Action Group</span>
                             <h3 class="m-0 text-base font-bold text-slate-900">{{ tab.label }}</h3>
                             <p class="text-xs text-slate-500">
@@ -542,10 +597,10 @@ const selectedActionMeta = computed(() =>
                                 class="flex flex-col gap-4 rounded-lg border p-4 border-slate-200 bg-slate-50"
                               >
                                 <div class="flex items-start justify-between gap-3">
-                                  <div class="flex flex-1 flex-col gap-1.5">
+                                  <div class="flex flex-1 flex-col gap-2">
                                     <code class="text-xs font-mono text-[var(--accent)]">{{ button.action }}</code>
                                     <h4 class="m-0 text-sm font-semibold text-slate-900">{{ button.label }}</h4>
-                                    <div class="flex items-center gap-1.5">
+                                    <div class="flex items-center gap-2">
                                       <ui-tag size="small" :color="button.mode === 'job' ? 'blue' : 'gray'">
                                         {{ describeButtonMode(button) }}
                                       </ui-tag>
@@ -589,14 +644,14 @@ const selectedActionMeta = computed(() =>
                                         type="password"
                                         allow-clear
                                         :placeholder="field.required ? '必填' : '可选'"
-                                        @input="(v: string) => setFieldValue(button.action, field.name, v)"
+                                        @update:model-value="(v: string) => setFieldValue(button.action, field.name, v)"
                                       />
                                       <ui-input
                                         v-else
                                         :model-value="fieldValue(button.action, field.name)"
                                         allow-clear
                                         :placeholder="field.required ? '必填' : '可选'"
-                                        @input="(v: string) => setFieldValue(button.action, field.name, v)"
+                                        @update:model-value="(v: string) => setFieldValue(button.action, field.name, v)"
                                       />
                                     </ui-form-item>
                                   </div>
@@ -645,7 +700,7 @@ const selectedActionMeta = computed(() =>
                                   <p v-if="execResults[button.action]!.error_message" class="m-0 text-sm text-red-700">
                                     {{ execResults[button.action]!.error_message }}
                                   </p>
-                                  <pre v-if="execResults[button.action]!.result" class="overflow-auto rounded-lg border border-slate-200 bg-slate-950 p-4 text-xs leading-6 text-slate-300 whitespace-pre-wrap break-all">{{
+                                  <pre v-if="execResults[button.action]!.result" class="overflow-auto rounded-lg border border-slate-200 bg-slate-50 shadow-sm p-4 text-xs leading-relaxed text-slate-600 font-mono whitespace-pre-wrap break-all">{{
                                     JSON.stringify(execResults[button.action]!.result, null, 2)
                                   }}</pre>
                                 </div>
@@ -673,8 +728,8 @@ const selectedActionMeta = computed(() =>
                       v-for="act in plugin.manifest.actions"
                       :key="act.key"
                       type="button"
-                      class="flex cursor-pointer flex-col gap-1 rounded-xl border border-transparent p-3 text-left bg-white/[32%] [transition-property:background-color,_border-color,_box-shadow,_transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/20 hover:border-slate-200 hover:bg-white hover:-translate-y-px"
-                      :class="{ 'border-blue-500/[18%] bg-slate-50 shadow-sm': selectedAction === act.key }"
+                      class="flex cursor-pointer flex-col gap-1 rounded-xl border border-transparent p-3 text-left bg-white/30 [transition-property:background-color,_border-color,_box-shadow,_transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 hover:border-slate-200 hover:bg-white hover:-translate-y-px"
+                      :class="{ 'border-blue-500/20 bg-slate-50 shadow-sm': selectedAction === act.key }"
                       @click="selectAction(act.key)"
                     >
                       <div class="flex items-center justify-between gap-2">
@@ -703,7 +758,7 @@ const selectedActionMeta = computed(() =>
                       </template>
                       <div class="flex flex-col gap-5">
                         <section class="flex items-start justify-between gap-3">
-                          <div class="flex flex-1 flex-col gap-1.5">
+                          <div class="flex flex-1 flex-col gap-2">
                             <code class="text-xs font-mono text-[var(--accent)]">{{ selectedAction }}</code>
                             <p class="text-sm text-slate-500">
                               {{ selectedActionMeta?.description || "为该操作填写 JSON 参数，然后在当前页面直接执行。" }}
@@ -741,7 +796,7 @@ const selectedActionMeta = computed(() =>
                             </span>
                           </div>
                           <p v-if="execResult.error_message" class="m-0 text-sm text-red-700">{{ execResult.error_message }}</p>
-                          <pre v-if="execResult.result" class="overflow-auto rounded-lg border border-slate-200 bg-slate-950 p-4 text-xs leading-6 text-slate-300 whitespace-pre-wrap break-all">{{ JSON.stringify(execResult.result, null, 2) }}</pre>
+                          <pre v-if="execResult.result" class="overflow-auto rounded-lg border border-slate-200 bg-slate-50 shadow-sm p-4 text-xs leading-relaxed text-slate-600 font-mono whitespace-pre-wrap break-all">{{ JSON.stringify(execResult.result, null, 2) }}</pre>
                         </div>
                       </div>
                     </ui-card>

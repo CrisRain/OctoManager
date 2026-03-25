@@ -4,7 +4,7 @@ import { navRoutes, routeNames, searchRoutes, shortcutRoutes, to, type IconKey }
 import { useCommandPaletteStore } from "@/store/command-palette";
 
 import {
-  IconDashboard, IconLayers, IconLink, IconEmail, IconSchedule,
+  IconDashboard, IconLayers, IconUser, IconEmail, IconSchedule,
   IconRobot, IconFile, IconApps, IconThunderbolt,
   IconSettings, IconMenu
 } from "@/lib/icons";
@@ -33,7 +33,7 @@ const keySequenceTimer = ref<number>();
 const iconMap: Record<IconKey, any> = {
   dashboard: IconDashboard,
   layers: IconLayers,
-  link: IconLink,
+  user: IconUser,
   email: IconEmail,
   schedule: IconSchedule,
   robot: IconRobot,
@@ -205,69 +205,94 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full flex-col">
-    <!-- ── Mobile header ─────────────────────────────────── -->
-    <header class="sticky top-0 z-40 mt-4 flex h-16 flex-shrink-0 items-center gap-3 rounded-xl border border-slate-200 bg-white/80 px-5 shadow-sm backdrop-blur-md lg:hidden mx-4">
-      <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-all hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/20" @click="mobileOpen = true">
-        <icon-menu />
-      </button>
-      <span class="flex-1 truncate font-semibold tracking-tight text-slate-900">{{ currentTitle }}</span>
+  <div class="flex h-full flex-col bg-white">
+    <header class="sticky top-0 z-40 mx-4 mt-4 lg:hidden">
+      <div class="relative overflow-hidden rounded-lg bg-[var(--sidebar-bg)] px-4 text-white">
+        <div class="absolute -right-6 top-3 h-20 w-20 rounded-full bg-white/10" />
+        <div class="absolute bottom-[-1.75rem] right-10 h-16 w-16 rotate-12 rounded-lg bg-white/12" />
+        <div class="relative flex h-16 items-center gap-3">
+          <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-md bg-white/14 text-white transition-all duration-200 hover:scale-105 hover:bg-white/22 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--sidebar-bg)]" @click="mobileOpen = true">
+            <icon-menu class="h-5 w-5" />
+          </button>
+          <div class="min-w-0 flex-1">
+            <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/72">workspace</div>
+            <span class="block truncate text-[1.05rem] font-extrabold tracking-[-0.02em] text-white">{{ currentTitle }}</span>
+          </div>
+          <div class="flex h-11 w-11 items-center justify-center rounded-md bg-[var(--highlight)] text-[var(--text-primary)]">
+            <icon-layers class="h-5 w-5" />
+          </div>
+        </div>
+      </div>
     </header>
 
-    <!-- ── Mobile drawer ─────────────────────────────────── -->
     <ui-drawer
       :visible="mobileOpen"
       placement="left"
       :footer="false"
       :header="false"
       popup-container="body"
-      class="[&.ui-drawer]:bg-[var(--sidebar-bg)] [&.ui-drawer-body]:p-0"
+      class="[&.ui-drawer]:bg-[var(--sidebar-bg)] [&.ui-drawer]:text-white [&.ui-drawer-body]:p-0"
       @cancel="closeMobile"
     >
-      <div class="flex h-full w-full flex-col overflow-y-auto px-2 py-3">
-        <!-- Logo -->
-        <div class="mb-5 flex items-center gap-3 px-3 py-3">
-          <div class="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--accent)] text-white shadow-sm">
-            <icon-layers class="h-4 w-4" />
+      <div class="relative flex h-full w-full flex-col overflow-y-auto px-3 py-4">
+        <div class="absolute -left-10 top-8 h-28 w-28 rounded-full bg-white/10" />
+        <div class="absolute bottom-10 right-4 h-24 w-24 rotate-12 rounded-lg bg-white/10" />
+        <div class="relative mb-8 flex items-center gap-3 px-3 py-3">
+          <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--highlight)] text-[var(--text-primary)]">
+            <icon-layers class="h-5 w-5" />
           </div>
-          <span class="text-[15px] font-bold tracking-tight text-slate-900">OctoManager</span>
+          <div>
+            <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/72">control</div>
+            <span class="text-[1.05rem] font-extrabold tracking-[-0.02em] text-white">OctoManager</span>
+          </div>
         </div>
-
-        <AppNavList
-          :items="navItems"
-          @navigate="closeMobile"
-        />
+        <div class="relative flex flex-1 flex-col">
+          <AppNavList
+            :items="navItems"
+            @navigate="closeMobile"
+          />
+          <div class="mt-6 rounded-lg bg-white/14 p-4 text-white">
+            <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/72">quick access</div>
+            <div class="mt-2 text-base font-bold tracking-[-0.02em]">Open command search with ⌘K</div>
+          </div>
+        </div>
       </div>
     </ui-drawer>
 
-    <!-- ── Main layout ────────────────────────────────────── -->
     <div class="flex flex-1 overflow-hidden min-h-0">
-      <!-- Desktop sidebar -->
-      <aside class="hidden w-60 flex-shrink-0 overflow-hidden border-r border-slate-200/80 bg-[var(--sidebar-bg)] p-3 lg:flex">
-        <div class="flex h-full w-full flex-col overflow-y-auto px-2 py-3">
-          <!-- Logo -->
-          <div class="mb-5 flex items-center gap-3 px-3 py-3">
-            <div class="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--accent)] text-white shadow-sm">
-              <icon-layers class="h-4 w-4" />
+      <aside class="relative hidden w-60 flex-shrink-0 overflow-hidden bg-[var(--sidebar-bg)] p-4 lg:flex">
+        <div class="absolute -left-8 top-10 h-28 w-28 rounded-full bg-white/10" />
+        <div class="absolute right-4 top-28 h-20 w-20 rotate-12 rounded-lg bg-white/10" />
+        <div class="absolute bottom-8 right-[-1.25rem] h-24 w-24 rounded-full bg-white/12" />
+        <div class="relative flex h-full w-full flex-col overflow-y-auto">
+          <div class="mb-8 flex items-center gap-3 px-2 py-2">
+            <div class="flex h-12 w-12 items-center justify-center rounded-lg bg-[var(--highlight)] text-[var(--text-primary)]">
+              <icon-layers class="h-5 w-5" />
             </div>
-            <span class="text-[15px] font-bold tracking-tight text-slate-900">OctoManager</span>
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/72">control</div>
+              <span class="text-[1.05rem] font-extrabold tracking-[-0.02em] text-white">OctoManager</span>
+            </div>
           </div>
-
           <AppNavList :items="navItems" />
+          <div class="mt-6 rounded-lg bg-white/14 p-4 text-white">
+            <div class="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/72">quick access</div>
+            <div class="mt-2 text-base font-bold tracking-[-0.02em]">Open command search with ⌘K</div>
+          </div>
         </div>
       </aside>
-
-      <!-- Content Area with Transition -->
-      <main class="flex-1 overflow-y-auto bg-[var(--page-bg,#f8fafc)]">
+      <main class="relative flex-1 overflow-y-auto bg-[var(--page-bg)]">
         <router-view v-slot="{ Component }">
           <transition name="fade-slide" mode="out-in">
-            <component :is="Component" />
+            <div class="relative min-h-full">
+              <div class="pointer-events-none absolute right-10 top-8 h-24 w-24 rounded-full bg-[var(--accent)]/8" />
+              <div class="pointer-events-none absolute left-12 top-28 h-16 w-16 rotate-12 rounded-lg bg-[var(--highlight)]/10" />
+              <component :is="Component" />
+            </div>
           </transition>
         </router-view>
       </main>
     </div>
-
-    <!-- 全局快捷键 -->
     <KeyboardShortcuts
       v-model:open="commandPalette.isOpen"
       v-model:query="commandPalette.query"

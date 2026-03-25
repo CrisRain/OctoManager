@@ -47,7 +47,7 @@ function handleActionClick(action: QuickAction) {
         <h3 class="text-[15px] font-semibold text-slate-900">快捷操作</h3>
         <button type="button"
           v-if="showSearchHint"
-          class="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 transition-all hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/20 [&_kbd]:rounded [&_kbd]:border [&_kbd]:border-slate-200 [&_kbd]:bg-white [&_kbd]:px-1.5 [&_kbd]:py-0.5 [&_kbd]:font-mono [&_kbd]:text-xs [&_kbd]:text-slate-600"
+          class="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-600 transition-all hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/20 [&_kbd]:rounded [&_kbd]:border [&_kbd]:border-slate-200 [&_kbd]:bg-white [&_kbd]:px-1.5 [&_kbd]:py-0.5 [&_kbd]:font-mono [&_kbd]:text-xs [&_kbd]:text-slate-600"
           @click="emit('open-search')"
         >
           <kbd>⌘K</kbd>
@@ -60,7 +60,7 @@ function handleActionClick(action: QuickAction) {
           type="button"
           v-for="action in actions"
           :key="action.id"
-          class="flex flex-col items-start gap-1.5 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/20"
+          class="flex flex-col items-start gap-2 rounded-xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/20"
           @click="handleActionClick(action)"
         >
           <div class="mb-1 flex h-10 w-10 items-center justify-center rounded-lg border shadow-sm"

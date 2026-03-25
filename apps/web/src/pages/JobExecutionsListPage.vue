@@ -3,7 +3,7 @@ import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
 import { IconHistory, IconRefresh, IconEye } from "@/lib/icons";
 
-import { PageHeader, SmartListBar, RowActionsMenu, DetailDrawer, StatusTag } from "@/components/index";
+import { PageHeader, SmartListBar, RowActionsMenu, StatusTag } from "@/components/index";
 import { useJobExecutions } from "@/composables/useJobs";
 import { useMessage } from "@/composables";
 import { to } from "@/router/registry";
@@ -56,19 +56,13 @@ const currentExecution = ref<any>(null);
 function handleQuickAction(key: string, execution: any) {
   switch (key) {
     case "view":
-      showExecutionDetail(execution);
+      goToDetail(execution.id);
       break;
     case "retry":
       // TODO: 实现重试逻辑
       message.info("重试功能开发中");
       break;
   }
-}
-
-// 显示详情抽屉
-function showExecutionDetail(execution: any) {
-  currentExecution.value = execution;
-  drawerVisible.value = true;
 }
 
 // 跳转到详情页（保留原有导航）
@@ -139,6 +133,7 @@ async function copyId(id: number) {
         }"
         :bordered="false"
         row-key="id"
+        :row-selection="{ type: 'checkbox' }"
       >
         <template #columns>
           <!-- 编号 -->
@@ -159,7 +154,7 @@ async function copyId(id: number) {
           <ui-table-column title="插件 · 动作">
             <template #cell="{ record }">
               <span class="inline-flex flex-wrap items-center gap-2">
-                <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-mono font-semibold text-slate-700 border-slate-200 bg-white/[64%]">{{ record.plugin_key }}</span>
+                <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-mono font-semibold text-slate-700 border-slate-200 bg-white/65">{{ record.plugin_key }}</span>
                 <span class="text-slate-400">·</span>
                 <span class="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-slate-600">{{ record.action }}</span>
               </span>
@@ -236,7 +231,7 @@ async function copyId(id: number) {
             <span class="w-12 flex-shrink-0 text-xs font-medium text-slate-500">插件</span>
             <div class="flex flex-wrap items-center gap-1">
               <span class="inline-flex flex-wrap items-center gap-2">
-                <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-mono font-semibold text-slate-700 border-slate-200 bg-white/[64%]">{{ record.plugin_key }}</span>
+                <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-mono font-semibold text-slate-700 border-slate-200 bg-white/65">{{ record.plugin_key }}</span>
                 <span class="text-slate-400">·</span>
                 <span class="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-slate-600">{{ record.action }}</span>
               </span>
@@ -262,7 +257,7 @@ async function copyId(id: number) {
 
       <ui-card
         v-if="!loading && !filteredExecutions.length"
-        class="rounded-xl border border-slate-200 bg-white shadow-sm px-5 py-8"
+        class="col-span-full empty-state-block"
       >
         <ui-empty description="暂无执行记录">
           <ui-button type="primary" @click="router.push(to.jobs.list())">
@@ -271,77 +266,5 @@ async function copyId(id: number) {
         </ui-empty>
       </ui-card>
     </div>
-
-    <!-- 详情抽屉 -->
-    <DetailDrawer
-      v-model:open="drawerVisible"
-      :title="`执行记录 #${currentExecution?.id}`"
-      @edit="goToDetail(currentExecution?.id)"
-    >
-      <template #detail>
-        <div class="rounded-xl border p-4 border-slate-200 bg-white/[56%]">
-          <h4 class="mb-3 text-sm font-semibold text-slate-900">执行信息</h4>
-
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">执行ID</span>
-            <span class="text-sm font-medium text-slate-900">
-              <code>{{ currentExecution?.id }}</code>
-            </span>
-          </div>
-
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">任务名称</span>
-            <span class="text-sm font-medium text-slate-900">{{ currentExecution?.definition_name }}</span>
-          </div>
-
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">插件</span>
-            <span class="text-sm font-medium text-slate-900">
-              <code class="inline-flex items-center rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-600">{{ currentExecution?.plugin_key }}</code>
-            </span>
-          </div>
-
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">动作</span>
-            <span class="text-sm font-medium text-slate-900">
-              <span class="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-slate-600">{{ currentExecution?.action }}</span>
-            </span>
-          </div>
-
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">状态</span>
-            <span class="text-sm font-medium text-slate-900">
-              <StatusTag v-if="currentExecution" :status="currentExecution.status" />
-            </span>
-          </div>
-
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">执行节点</span>
-            <span class="text-sm font-medium text-slate-900">
-              <code v-if="currentExecution?.worker_id">{{ currentExecution.worker_id }}</code>
-              <span v-else class="text-sm text-slate-400">未分配</span>
-            </span>
-          </div>
-        </div>
-
-        <div class="rounded-xl border p-4 border-slate-200 bg-white/[56%]" v-if="currentExecution?.input">
-          <h4 class="mb-3 text-sm font-semibold text-slate-900">输入参数</h4>
-          <pre class="overflow-auto rounded-lg border border-slate-200 bg-slate-950 p-4 text-xs leading-6 text-slate-300 whitespace-pre-wrap break-all">{{ JSON.stringify(currentExecution.input, null, 2) }}</pre>
-        </div>
-      </template>
-
-      <template #activity>
-        <ui-empty description="暂无活动记录" />
-      </template>
-
-      <template #footer>
-        <div class="flex w-full items-center justify-end gap-2">
-          <ui-button @click="copyId(currentExecution?.id)">复制ID</ui-button>
-          <ui-button type="primary" @click="goToDetail(currentExecution?.id)">
-            查看完整日志
-          </ui-button>
-        </div>
-      </template>
-    </DetailDrawer>
   </div>
 </template>

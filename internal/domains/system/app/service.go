@@ -2,12 +2,19 @@ package systemapp
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
-	pluginapp "octomanger/internal/domains/plugins/app"
+	plugindomain "octomanger/internal/domains/plugins/domain"
 )
+
+// pluginLister is the narrow interface systemapp needs from the plugin backend.
+type pluginLister interface {
+	List(ctx context.Context) ([]plugindomain.Plugin, error)
+}
 
 type Status struct {
 	Now         time.Time `json:"now"`
@@ -19,14 +26,14 @@ type Status struct {
 // frontend requests with a single round-trip. Counts are produced by cheap SQL
 // COUNT queries; recent executions fetch the latest 6 rows only.
 type DashboardSummary struct {
-	PluginCount        int              `json:"pluginCount"`
-	AccountTypeCount   int              `json:"accountTypeCount"`
-	AccountCount       int              `json:"accountCount"`
-	EmailAccountCount  int              `json:"emailAccountCount"`
-	JobDefinitionCount int              `json:"jobDefinitionCount"`
-	JobExecutionCount  int              `json:"jobExecutionCount"`
-	TriggerCount       int              `json:"triggerCount"`
-	AgentCount         int              `json:"agentCount"`
+	PluginCount        int               `json:"pluginCount"`
+	AccountTypeCount   int               `json:"accountTypeCount"`
+	AccountCount       int               `json:"accountCount"`
+	EmailAccountCount  int               `json:"emailAccountCount"`
+	JobDefinitionCount int               `json:"jobDefinitionCount"`
+	JobExecutionCount  int               `json:"jobExecutionCount"`
+	TriggerCount       int               `json:"triggerCount"`
+	AgentCount         int               `json:"agentCount"`
 	RecentExecutions   []RecentExecution `json:"recentExecutions"`
 }
 
@@ -43,34 +50,47 @@ type RecentExecution struct {
 
 type Service struct {
 	db      *gorm.DB
-	plugins pluginapp.Service
+	plugins pluginLister
+	rdb     *redis.Client
 }
 
-func New(db *gorm.DB, plugins pluginapp.Service) Service {
-	return Service{db: db, plugins: plugins}
+func New(db *gorm.DB, plugins pluginLister, rdb ...*redis.Client) Service {
+	var client *redis.Client
+	if len(rdb) > 0 {
+		client = rdb[0]
+	}
+	return Service{db: db, plugins: plugins, rdb: client}
 }
 
 func (s Service) Status(ctx context.Context) (Status, error) {
+	if item, ok := s.readStatusCache(ctx); ok {
+		return item, nil
+	}
 	plugins, err := s.plugins.List(ctx)
 	if err != nil {
 		return Status{}, err
 	}
 
-	return Status{
+	item := Status{
 		Now:         time.Now().UTC(),
 		DatabaseOK:  s.db != nil,
 		PluginCount: len(plugins),
-	}, nil
+	}
+	s.writeStatusCache(ctx, item)
+	return item, nil
 }
 
 // DashboardSummary returns entity counts and the 6 most recent executions in a
 // single DB round-trip (one query per table — all cheap COUNT/LIMIT queries).
 func (s Service) DashboardSummary(ctx context.Context) (DashboardSummary, error) {
+	if item, ok := s.readDashboardCache(ctx); ok {
+		return item, nil
+	}
 	type countRow struct{ N int64 }
 
 	countOf := func(table string) (int, error) {
 		var row countRow
-		if err := s.db.WithContext(ctx).Raw("SELECT COUNT(*) AS n FROM "+table).Scan(&row).Error; err != nil {
+		if err := s.db.WithContext(ctx).Raw("SELECT COUNT(*) AS n FROM " + table).Scan(&row).Error; err != nil {
 			return 0, err
 		}
 		return int(row.N), nil
@@ -79,25 +99,39 @@ func (s Service) DashboardSummary(ctx context.Context) (DashboardSummary, error)
 	pluginList, _ := s.plugins.List(ctx) // plugins live in-memory; no separate table
 
 	accountTypeCount, err := countOf("account_types")
-	if err != nil { return DashboardSummary{}, err }
+	if err != nil {
+		return DashboardSummary{}, err
+	}
 
 	accountCount, err := countOf("accounts")
-	if err != nil { return DashboardSummary{}, err }
+	if err != nil {
+		return DashboardSummary{}, err
+	}
 
 	emailAccountCount, err := countOf("email_accounts")
-	if err != nil { return DashboardSummary{}, err }
+	if err != nil {
+		return DashboardSummary{}, err
+	}
 
 	jobDefinitionCount, err := countOf("job_definitions")
-	if err != nil { return DashboardSummary{}, err }
+	if err != nil {
+		return DashboardSummary{}, err
+	}
 
 	jobExecutionCount, err := countOf("job_executions")
-	if err != nil { return DashboardSummary{}, err }
+	if err != nil {
+		return DashboardSummary{}, err
+	}
 
 	triggerCount, err := countOf("triggers")
-	if err != nil { return DashboardSummary{}, err }
+	if err != nil {
+		return DashboardSummary{}, err
+	}
 
 	agentCount, err := countOf("agents")
-	if err != nil { return DashboardSummary{}, err }
+	if err != nil {
+		return DashboardSummary{}, err
+	}
 
 	// Fetch the 6 most recent executions — a lightweight projection, not the full scan.
 	rows, err := s.db.WithContext(ctx).Raw(`
@@ -123,7 +157,7 @@ func (s Service) DashboardSummary(ctx context.Context) (DashboardSummary, error)
 		return DashboardSummary{}, err
 	}
 
-	return DashboardSummary{
+	item := DashboardSummary{
 		PluginCount:        len(pluginList),
 		AccountTypeCount:   accountTypeCount,
 		AccountCount:       accountCount,
@@ -133,5 +167,56 @@ func (s Service) DashboardSummary(ctx context.Context) (DashboardSummary, error)
 		TriggerCount:       triggerCount,
 		AgentCount:         agentCount,
 		RecentExecutions:   recent,
-	}, nil
+	}
+	s.writeDashboardCache(ctx, item)
+	return item, nil
+}
+
+func (s Service) readStatusCache(ctx context.Context) (Status, bool) {
+	if s.rdb == nil {
+		return Status{}, false
+	}
+	raw, err := s.rdb.Get(ctx, "system:status").Bytes()
+	if err != nil {
+		return Status{}, false
+	}
+	var item Status
+	if err := json.Unmarshal(raw, &item); err != nil {
+		return Status{}, false
+	}
+	return item, true
+}
+
+func (s Service) writeStatusCache(ctx context.Context, item Status) {
+	s.writeCache(ctx, "system:status", item)
+}
+
+func (s Service) readDashboardCache(ctx context.Context) (DashboardSummary, bool) {
+	if s.rdb == nil {
+		return DashboardSummary{}, false
+	}
+	raw, err := s.rdb.Get(ctx, "system:dashboard").Bytes()
+	if err != nil {
+		return DashboardSummary{}, false
+	}
+	var item DashboardSummary
+	if err := json.Unmarshal(raw, &item); err != nil {
+		return DashboardSummary{}, false
+	}
+	return item, true
+}
+
+func (s Service) writeDashboardCache(ctx context.Context, item DashboardSummary) {
+	s.writeCache(ctx, "system:dashboard", item)
+}
+
+func (s Service) writeCache(ctx context.Context, key string, item any) {
+	if s.rdb == nil {
+		return
+	}
+	raw, err := json.Marshal(item)
+	if err != nil {
+		return
+	}
+	_ = s.rdb.Set(ctx, key, raw, 3*time.Second).Err()
 }

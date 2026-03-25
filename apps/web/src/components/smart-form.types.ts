@@ -20,4 +20,6 @@ export interface FieldConfig {
     type: "timestamp" | "uuid" | "random" | "currentUser";
     format?: string;
   };
+  /** 悬浮提示文本，显示在字段标签旁的 ? 图标上 */
+  help?: string;
 }

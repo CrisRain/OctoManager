@@ -66,6 +66,15 @@ type JobLog struct {
 	CreatedAt      time.Time      `json:"created_at"`
 }
 
+// JobLogEntry is the write model for a single log row (used by batch inserts).
+type JobLogEntry struct {
+	ExecutionID int64
+	Stream      string
+	EventType   string
+	Message     string
+	Payload     map[string]any
+}
+
 type CreateDefinitionInput struct {
 	Key       string         `json:"key"`
 	Name      string         `json:"name"`
@@ -79,4 +88,11 @@ type ScheduleInput struct {
 	CronExpression string `json:"cron_expression"`
 	Timezone       string `json:"timezone,omitempty"`
 	Enabled        bool   `json:"enabled"`
+}
+
+type PatchDefinitionInput struct {
+	Name     *string        `json:"name,omitempty"`
+	Input    map[string]any `json:"input,omitempty"`
+	Enabled  *bool          `json:"enabled,omitempty"`
+	Schedule *ScheduleInput `json:"schedule,omitempty"`
 }

@@ -88,10 +88,10 @@ async function saveSettings() {
       </template>
     </PageHeader>
 
-    <div v-if="loading" class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center border-slate-200 bg-white/[56%] shadow-sm">
+    <div v-if="loading" class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center border-slate-200 bg-white/55 shadow-sm">
       <ui-spin size="2.25em" />
     </div>
-    <div v-else-if="!plugin" class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center border-slate-200 bg-white/[56%] shadow-sm min-h-[240px]">
+    <div v-else-if="!plugin" class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center border-slate-200 bg-white/55 shadow-sm min-h-[240px]">
       <icon-apps class="h-12 w-12 text-slate-400" />
       <p class="text-base font-semibold text-slate-900">未找到该插件。</p>
     </div>
@@ -101,7 +101,7 @@ async function saveSettings() {
       <ui-card class="min-w-0 flex-1 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
         <template #title>
           <div class="flex items-center gap-2">
-            <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl text-[var(--accent)] bg-[var(--accent)]/10"><icon-thunderbolt /></div>
+            <icon-thunderbolt class="h-4 w-4 text-[var(--accent)]" />
             可用操作
           </div>
         </template>
@@ -128,26 +128,26 @@ async function saveSettings() {
         <ui-card class="min-w-0 flex-1 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
           <template #title>
             <div class="flex items-center gap-2">
-              <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl text-sky-700 bg-sky-50"><icon-info-circle /></div>
+              <icon-info-circle class="h-4 w-4 text-sky-600" />
               插件信息
             </div>
           </template>
           <div class="flex flex-col">
-            <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-              <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">健康状态</span>
-              <div class="inline-flex items-center gap-1.5">
+            <div class="flex items-center justify-between gap-4 border-b border-slate-100 py-4 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start max-md:gap-2">
+              <span class="text-xs font-semibold tracking-wider text-slate-500">健康状态</span>
+              <div class="inline-flex items-center gap-2">
                 <span class="inline-block h-2 w-2 flex-shrink-0 rounded-full" :class="plugin.healthy ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'" />
                 <ui-tag :color="plugin.healthy ? 'green' : 'red'">
                   {{ plugin.healthy ? "healthy" : "degraded" }}
                 </ui-tag>
               </div>
             </div>
-            <div v-if="plugin.manifest.description" class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-              <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">描述</span>
+            <div v-if="plugin.manifest.description" class="flex items-center justify-between gap-4 border-b border-slate-100 py-4 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start max-md:gap-2">
+              <span class="text-xs font-semibold tracking-wider text-slate-500">描述</span>
               <span class="text-sm font-medium text-slate-900 leading-7 text-slate-700 ml-auto text-left max-md:text-left">{{ plugin.manifest.description }}</span>
             </div>
-            <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start flex-col gap-3">
-              <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 mb-0">权限列表</span>
+            <div class="flex items-center justify-between gap-4 border-b border-slate-100 py-4 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start max-md:gap-2 flex-col gap-3">
+              <span class="text-xs font-semibold tracking-wider text-slate-500 mb-0">权限列表</span>
               <div v-if="plugin.manifest.capabilities.length" class="flex flex-wrap gap-2">
                 <ui-tag v-for="cap in plugin.manifest.capabilities" :key="cap" size="small" class="whitespace-nowrap" color="blue">
                   {{ cap }}
@@ -161,7 +161,7 @@ async function saveSettings() {
         <ui-card class="min-w-0 flex-1 rounded-xl border overflow-hidden border-slate-200 bg-white shadow">
           <template #title>
             <div class="flex items-center gap-2">
-              <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl text-amber-700 bg-amber-50"><icon-tool /></div>
+              <icon-tool class="h-4 w-4 text-amber-600" />
               操作
             </div>
           </template>
@@ -189,7 +189,7 @@ async function saveSettings() {
         >
           <template #title>
             <div class="flex items-center gap-2">
-              <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl text-[var(--accent)] bg-[var(--accent)]/10"><icon-settings /></div>
+              <icon-settings class="h-4 w-4 text-[var(--accent)]" />
               插件设置
             </div>
           </template>
@@ -204,7 +204,7 @@ async function saveSettings() {
                   <span class="text-sm font-semibold text-slate-900">{{ s.label || s.key }}</span>
                   <ui-tag v-if="s.required" size="small" color="red" class="ml-2">必填</ui-tag>
                 </template>
-                <div class="flex flex-col gap-1.5">
+                <div class="flex flex-col gap-2">
                   <ui-input
                     v-if="isSecretSetting(s.key, s.secret)"
                     v-model="settingValues[s.key]"
@@ -223,16 +223,18 @@ async function saveSettings() {
                   <p v-if="s.description" class="text-sm leading-6 text-slate-500">{{ s.description }}</p>
                 </div>
               </ui-form-item>
-              <ui-button
-                type="primary"
-                class="self-start max-md:w-full max-md:justify-center"
-                :loading="settings.saving.value"
-                @click="saveSettings"
-              >
-                保存设置
-              </ui-button>
             </ui-form>
           </ui-spin>
+          <template #footer>
+            <ui-button
+              type="primary"
+              class="max-md:w-full max-md:justify-center"
+              :loading="settings.saving.value"
+              @click="saveSettings"
+            >
+              保存设置
+            </ui-button>
+          </template>
         </ui-card>
       </div>
     </div>

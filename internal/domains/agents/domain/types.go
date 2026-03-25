@@ -36,9 +36,22 @@ type AgentStatus struct {
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
 
+// AgentLogEntry is the write model for a single agent log row (used by batch inserts).
+type AgentLogEntry struct {
+	AgentID   int64
+	EventType string
+	Message   string
+	Payload   map[string]any
+}
+
 type CreateAgentInput struct {
 	Name      string         `json:"name"`
 	PluginKey string         `json:"plugin_key"`
 	Action    string         `json:"action"`
 	Input     map[string]any `json:"input"`
+}
+
+type PatchAgentInput struct {
+	Name  *string        `json:"name,omitempty"`
+	Input map[string]any `json:"input,omitempty"`
 }

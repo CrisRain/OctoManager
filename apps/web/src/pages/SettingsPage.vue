@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import {
   IconSettings,
   IconCloud,
@@ -24,6 +24,8 @@ const { withErrorHandler } = useErrorHandler();
 const authStore = useAuthStore();
 const { adminKey } = storeToRefs(authStore);
 const adminKeySet = computed(() => Boolean(adminKey.value?.trim()));
+const adminKeyDraft = ref("");
+const adminKeyChanged = computed(() => adminKeyDraft.value !== (adminKey.value ?? ""));
 
 const {
   knownConfigs,
@@ -36,8 +38,21 @@ const {
 
 onMounted(() => { void loadConfigs(); });
 
+watch(
+  adminKey,
+  (value) => {
+    adminKeyDraft.value = value ?? "";
+  },
+  { immediate: true }
+);
+
 function persistAdminKey(value: string) {
   authStore.setKey(value);
+}
+
+function handleSaveAdminKey() {
+  persistAdminKey(adminKeyDraft.value);
+  message.success(adminKeyDraft.value.trim() ? "管理员密钥已保存" : "管理员密钥已清空");
 }
 
 async function handleSaveConfig(configKey: string) {
@@ -91,8 +106,8 @@ async function refreshStatus() {
         </template>
 
         <div class="flex flex-col">
-          <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">数据库连接</span>
+          <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+            <span class="text-xs font-semibold tracking-wider text-slate-500">数据库连接</span>
             <div class="flex items-center gap-2">
               <span
                 class="inline-block h-2 w-2 flex-shrink-0 rounded-full transition-colors"
@@ -106,12 +121,12 @@ async function refreshStatus() {
               </span>
             </div>
           </div>
-          <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">已加载插件数</span>
+          <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+            <span class="text-xs font-semibold tracking-wider text-slate-500">已加载插件数</span>
             <span class="text-sm font-medium text-slate-900">{{ statusData?.plugin_count ?? "—" }}</span>
           </div>
-          <div v-if="statusData?.now" class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">服务器时间</span>
+          <div v-if="statusData?.now" class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+            <span class="text-xs font-semibold tracking-wider text-slate-500">服务器时间</span>
             <span class="text-sm font-medium text-slate-900 font-mono">{{ new Date(statusData.now).toLocaleString("zh-CN") }}</span>
           </div>
         </div>
@@ -127,8 +142,8 @@ async function refreshStatus() {
         </template>
 
         <div class="flex flex-col">
-          <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col max-md:items-start border-b-0 pb-0">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">浏览器中的 Admin Key</span>
+          <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2 border-b-0 pb-0">
+            <span class="text-xs font-semibold tracking-wider text-slate-500">浏览器中的 Admin Key</span>
             <div class="flex items-center gap-2">
               <span
                 class="inline-block h-2 w-2 flex-shrink-0 rounded-full transition-colors"
@@ -144,21 +159,40 @@ async function refreshStatus() {
           </div>
         </div>
 
-        <div class="mt-4 rounded-xl border p-4 border-slate-200 bg-white/[56%] shadow-sm">
-          <ui-input
-            :model-value="adminKey"
-            placeholder="输入 Admin Key..."
-            allow-clear
-            type="password"
-            class="w-full"
-            @input="persistAdminKey($event)"
-          />
-          <p class="text-sm leading-6 text-slate-500">
-            保存于当前浏览器，填写后会自动在所有请求里附带 <code>X-Admin-Key</code>。
-          </p>
-        </div>
+        <form class="mt-4 rounded-xl border p-4 border-slate-200 bg-white/55 shadow-sm" @submit.prevent="handleSaveAdminKey">
+          <div class="flex flex-col gap-3">
+            <ui-input
+              v-model="adminKeyDraft"
+              placeholder="输入 Admin Key..."
+              allow-clear
+              type="password"
+              class="w-full"
+            />
+            <div class="flex flex-col gap-3 [@media(min-width:768px)]:grid [@media(min-width:768px)]:gap-3 [@media(min-width:768px)]:grid-cols-[minmax(0,_1fr)_auto_auto]">
+              <p class="text-sm leading-6 text-slate-500">
+                保存于当前浏览器，填写后会自动在所有请求里附带 <code>X-Admin-Key</code>。
+              </p>
+              <ui-button
+                class="self-start max-md:w-full max-md:justify-center"
+                :disabled="!adminKeyChanged"
+                @click="adminKeyDraft = ''"
+              >
+                清空
+              </ui-button>
+              <ui-button
+                type="primary"
+                html-type="submit"
+                class="self-start max-md:w-full max-md:justify-center"
+                :disabled="!adminKeyChanged"
+              >
+                <template #icon><icon-check /></template>
+                保存
+              </ui-button>
+            </div>
+          </div>
+        </form>
 
-        <div class="text-sm leading-6 text-slate-500 mt-4 flex flex-col gap-1.5 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
+        <div class="text-sm leading-6 text-slate-500 mt-4 flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
           <p>您的 Admin Key 已保存在本地浏览器中。</p>
           <p>该值由服务器端的环境变量 <code>ADMIN_KEY</code> 控制。</p>
         </div>
@@ -169,7 +203,7 @@ async function refreshStatus() {
       <ui-card class="min-w-0">
         <template #title>
           <div class="flex items-center gap-2">
-            <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl text-[var(--accent)] bg-[var(--accent)]/10"><icon-safe /></div>
+            <icon-safe class="h-5 w-5 text-[var(--accent)]" />
             API 密钥管理
           </div>
         </template>
@@ -185,12 +219,12 @@ async function refreshStatus() {
 
           <div class="overflow-hidden rounded-xl border border-slate-800 bg-slate-900 shadow-sm">
             <div class="flex items-center justify-between gap-3 border-b border-slate-800 px-4 py-2.5">
-              <div class="flex items-center gap-1.5">
+              <div class="flex items-center gap-2">
                 <span class="h-2.5 w-2.5 rounded-full bg-red-400"></span>
                 <span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>
                 <span class="h-2.5 w-2.5 rounded-full bg-emerald-400"></span>
               </div>
-              <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">HTTP Request Header</span>
+              <span class="text-xs font-semibold tracking-wider text-slate-500">HTTP Request Header</span>
             </div>
             <div class="px-4 py-4 font-mono text-sm">
               <code><span class="text-[var(--accent)]/80">X-Admin-Key</span><span class="text-slate-500">: </span><span class="text-slate-200">&lt;your-admin-key&gt;</span></code>
@@ -207,7 +241,7 @@ async function refreshStatus() {
       <ui-card class="min-w-0">
         <template #title>
           <div class="flex items-center gap-2">
-            <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-xl text-[var(--accent)] bg-[var(--accent)]/10"><icon-lock /></div>
+            <icon-lock class="h-5 w-5 text-[var(--accent)]" />
             SSL 安全证书管理
           </div>
         </template>
@@ -248,7 +282,7 @@ async function refreshStatus() {
               :model-value="configEdits[c.key] ?? ''"
               placeholder='例如: "OctoManger" 或 30'
               class="w-full"
-              @input="configEdits[c.key] = $event"
+              @update:modelValue="configEdits[c.key] = $event"
             />
             <ui-button
               type="primary"

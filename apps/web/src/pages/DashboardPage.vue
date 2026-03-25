@@ -2,7 +2,7 @@
 import {
   IconApps, IconLayers, IconUser, IconEmail,
   IconSchedule, IconHistory, IconRobot, IconRefresh, IconLoading,
-  IconPlus, IconSettings, IconArrowRight, IconThunderbolt
+  IconPlus, IconSettings, IconArrowRight, IconThunderbolt, IconCheckCircle
 } from "@/lib/icons";
 
 import { useSystemStatus, useDashboardSnapshot } from "@/composables/useDashboard";
@@ -15,13 +15,62 @@ const systemStatus = useSystemStatus();
 const snapshot = useDashboardSnapshot();
 const commandPalette = useCommandPaletteStore();
 
+// 新手引导：当账号类型、账号、任务都为 0 时显示
+const isNewUser = computed(() => {
+  const d = snapshot.data.value;
+  if (!d) return false;
+  return d.accountTypeCount === 0 && d.accountCount === 0 && d.jobDefinitionCount === 0;
+});
+
+interface OnboardingStep {
+  step: number;
+  label: string;
+  description: string;
+  path: string;
+  done: boolean;
+}
+
+const onboardingSteps = computed((): OnboardingStep[] => {
+  const d = snapshot.data.value;
+  return [
+    {
+      step: 1,
+      label: "安装插件",
+      description: "插件提供具体的自动化能力（如 GitHub、邮件等）",
+      path: to.plugins.list(),
+      done: (d?.pluginCount ?? 0) > 0,
+    },
+    {
+      step: 2,
+      label: "创建账号类型",
+      description: "定义账号的凭证字段结构",
+      path: to.accountTypes.create(),
+      done: (d?.accountTypeCount ?? 0) > 0,
+    },
+    {
+      step: 3,
+      label: "添加账号",
+      description: "录入需要自动化管理的账号信息",
+      path: to.accounts.create(),
+      done: (d?.accountCount ?? 0) > 0,
+    },
+    {
+      step: 4,
+      label: "创建任务",
+      description: "配置自动化任务，设置触发方式与执行插件",
+      path: to.jobs.create(),
+      done: (d?.jobDefinitionCount ?? 0) > 0,
+    },
+  ];
+});
+
 // 统计卡片配置
 interface StatCard {
   label: string;
   valueKey: keyof Omit<DashboardSummary, "recentExecutions">;
   icon: any;
-  gradientBg: string;
-  iconColor: string;
+  /** CSS class from the .icon-* utility set defined in tailwind.css */
+  iconClass: string;
   path?: string;
 }
 
@@ -30,56 +79,49 @@ const statCards: StatCard[] = [
     label: "插件",
     valueKey: "pluginCount",
     icon: IconApps,
-    gradientBg: "rgba(20, 184, 166, 0.1)",
-    iconColor: "#14b8a6",
+    iconClass: "icon-teal",
     path: to.plugins.list()
   },
   {
     label: "账号类型",
     valueKey: "accountTypeCount",
     icon: IconLayers,
-    gradientBg: "rgba(2, 132, 199, 0.1)",
-    iconColor: "#0284c7",
+    iconClass: "icon-blue",
     path: to.accountTypes.list()
   },
   {
     label: "账号",
     valueKey: "accountCount",
     icon: IconUser,
-    gradientBg: "rgba(22, 163, 74, 0.1)",
-    iconColor: "#16a34a",
+    iconClass: "icon-green",
     path: to.accounts.list()
   },
   {
     label: "邮箱账号",
     valueKey: "emailAccountCount",
     icon: IconEmail,
-    gradientBg: "rgba(234, 88, 12, 0.1)",
-    iconColor: "#ea580c",
+    iconClass: "icon-orange",
     path: to.emailAccounts.list()
   },
   {
     label: "任务定义",
     valueKey: "jobDefinitionCount",
     icon: IconSchedule,
-    gradientBg: "rgba(202, 138, 4, 0.1)",
-    iconColor: "#ca8a04",
+    iconClass: "icon-yellow",
     path: to.jobs.list()
   },
   {
     label: "执行总数",
     valueKey: "jobExecutionCount",
     icon: IconHistory,
-    gradientBg: "rgba(225, 29, 72, 0.1)",
-    iconColor: "#e11d48",
+    iconClass: "icon-red",
     path: to.jobs.executions()
   },
   {
     label: "Agent",
     valueKey: "agentCount",
     icon: IconRobot,
-    gradientBg: "rgba(14, 165, 233, 0.1)",
-    iconColor: "#0ea5e9",
+    iconClass: "icon-cyan",
     path: to.agents.list()
   },
 ];
@@ -153,7 +195,7 @@ function refreshDashboard() {
           ? 'bg-emerald-500 animate-pulse'
           : 'bg-red-500'"
       />
-      <div class="flex flex-1 items-center gap-2 max-md:flex-col max-md:items-start max-md:gap-1.5">
+      <div class="flex flex-1 items-center gap-2 max-md:flex-col max-md:items-start max-md:gap-2">
         <span class="font-semibold">
           {{ systemStatus.data.value?.database_ok ? '系统运行正常' : '系统异常，请检查服务状态' }}
         </span>
@@ -163,8 +205,46 @@ function refreshDashboard() {
       </div>
     </div>
 
+    <!-- 新手引导卡片：仅在还没有核心数据时显示 -->
+    <div
+      v-if="isNewUser"
+      class="mb-6 rounded-xl border border-blue-200 bg-blue-50/80 p-5"
+    >
+      <div class="mb-4 flex items-center gap-2">
+        <div class="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+          <icon-schedule class="h-4 w-4" />
+        </div>
+        <div>
+          <p class="text-sm font-semibold text-blue-900">快速开始</p>
+          <p class="text-xs text-blue-600">按照以下步骤完成系统初始化</p>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <button
+          v-for="step in onboardingSteps"
+          :key="step.step"
+          type="button"
+          class="group flex items-start gap-3 rounded-lg border bg-white/80 px-4 py-3 text-left transition-all hover:border-blue-300 hover:bg-white hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400/40"
+          :class="step.done ? 'border-emerald-200 opacity-70' : 'border-blue-200'"
+          @click="!step.done && router.push(step.path)"
+        >
+          <div
+            class="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold"
+            :class="step.done ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'"
+          >
+            <icon-check-circle v-if="step.done" class="h-4 w-4" />
+            <span v-else>{{ step.step }}</span>
+          </div>
+          <div class="min-w-0">
+            <p class="text-sm font-medium" :class="step.done ? 'text-slate-400 line-through' : 'text-slate-800'">{{ step.label }}</p>
+            <p class="mt-0.5 text-xs text-slate-500 leading-relaxed">{{ step.description }}</p>
+          </div>
+        </button>
+      </div>
+    </div>
+
     <!-- 统计卡片 - 可点击跳转 -->
-    <div class="mb-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+    <div class="mb-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-7">
       <button
         type="button"
         v-for="card in statCards"
@@ -175,7 +255,7 @@ function refreshDashboard() {
       >
         <div
           class="mb-1 flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-110"
-          :style="{ background: card.gradientBg, color: card.iconColor }"
+          :class="card.iconClass"
         >
           <component :is="card.icon" class="h-5 w-5" />
         </div>

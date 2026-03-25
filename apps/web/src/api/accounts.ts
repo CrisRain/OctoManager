@@ -1,5 +1,6 @@
 import { client } from "@/shared/api/generated/client";
 import type {
+  Account,
   AccountExecuteInput,
   AccountExecuteResult,
   AccountCreateInput,
@@ -8,6 +9,9 @@ import type {
 } from "@/types";
 
 export const listAccounts = (): Promise<ListAccountsResponse> => client.listAccounts();
+
+export const getAccount = (id: number): Promise<Account> =>
+  client.getAccount({ path: { id } });
 
 export const createAccount = (payload: AccountCreateInput) =>
   client.createAccount({ body: payload });

@@ -18,7 +18,7 @@ func (s Service) GetConfig(ctx context.Context, key string) (json.RawMessage, er
 	).Row()
 	if err := row.Scan(&value); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, errors.New("config not found")
+			return json.RawMessage("{}"), nil
 		}
 		return nil, err
 	}

@@ -54,7 +54,7 @@ function onChange(event: Event) {
 <template>
   <div v-bind="{ ...attrs, class: undefined }" :class="wrapperClass">
     <input
-      class="h-9 w-full border-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+      class="h-9 w-full border-0 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-500"
       type="number"
       :value="modelValue ?? ''"
       :min="min"

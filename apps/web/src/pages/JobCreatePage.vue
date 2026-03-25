@@ -3,11 +3,12 @@ import { ref, reactive } from "vue";
 import { useRouter } from "vue-router";
 import { IconClockCircle, IconPlus } from "@/lib/icons";
 
-import { PageHeader, SmartForm } from "@/components/index";
+import { FormActionBar, FormPageLayout, PageHeader, SmartForm } from "@/components/index";
 import { useCreateJobDefinition } from "@/composables/useJobs";
 import { useMessage, useErrorHandler } from "@/composables";
 import type { FieldConfig } from "@/components/smart-form.types";
 import { to } from "@/router/registry";
+import { Notification } from "@/lib/feedback";
 
 const router = useRouter();
 const message = useMessage();
@@ -18,7 +19,7 @@ const create = useCreateJobDefinition();
 const formRef = ref<InstanceType<typeof SmartForm>>();
 
 // 表单数据
-const formData = reactive({
+const formData = ref({
   key: "",
   name: "",
   plugin_key: "",
@@ -111,7 +112,7 @@ const cronPresets = [
 
 // 应用预设 Cron 表达式
 function applyCronPreset(preset: string) {
-  formData.cron_expression = preset;
+  formData.value.cron_expression = preset;
 }
 
 // 提交创建
@@ -126,8 +127,8 @@ async function handleCreate() {
   // 解析输入参数
   let input: Record<string, unknown> = {};
   try {
-    if (formData.input.trim()) {
-      input = JSON.parse(formData.input) as Record<string, unknown>;
+    if (formData.value.input.trim()) {
+      input = JSON.parse(formData.value.input) as Record<string, unknown>;
     }
   } catch (e) {
     message.error("输入参数格式错误，请检查 JSON 格式");
@@ -137,20 +138,21 @@ async function handleCreate() {
   await withErrorHandler(
     async () => {
       await create.execute({
-        key: formData.key.trim(),
-        name: formData.name.trim(),
-        plugin_key: formData.plugin_key.trim(),
-        action: formData.action.trim(),
+        key: formData.value.key.trim(),
+        name: formData.value.name.trim(),
+        plugin_key: formData.value.plugin_key.trim(),
+        action: formData.value.action.trim(),
         input,
-        schedule: formData.schedule_enabled && formData.cron_expression.trim()
+        schedule: formData.value.schedule_enabled && formData.value.cron_expression.trim()
           ? {
-              cron_expression: formData.cron_expression.trim(),
-              timezone: formData.timezone,
+              cron_expression: formData.value.cron_expression.trim(),
+              timezone: formData.value.timezone,
               enabled: true,
             }
           : undefined,
       });
       message.success("任务定义已创建");
+      Notification.info({ title: "下一步", content: "点击「立即执行」手动触发一次，或在任务详情中配置触发器", duration: 7000 });
       router.push(to.jobs.list());
     },
     { action: "创建任务", showSuccess: true }
@@ -176,103 +178,99 @@ function handleCancel() {
       <template #icon><icon-clock-circle /></template>
     </PageHeader>
 
-    <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,_1.45fr)_minmax(16em,_0.85fr)]">
-      <!-- 表单卡片 -->
-      <ui-card class="min-w-0">
-        <template #title>
-          <div class="flex items-center gap-2">
-            <icon-plus class="h-5 w-5 text-[var(--accent)]" />
-            <span>基本信息</span>
-          </div>
-        </template>
+    <FormPageLayout>
+      <template #main>
+        <ui-card class="min-w-0">
+          <template #title>
+            <div class="flex items-center gap-2">
+              <icon-plus class="h-5 w-5 text-[var(--accent)]" />
+              <span>基本信息</span>
+            </div>
+          </template>
 
-        <SmartForm
-          ref="formRef"
-          v-model="formData"
-          :fields="formFields"
+          <SmartForm
+            ref="formRef"
+            v-model="formData"
+            :fields="formFields"
+          />
+
+          <div v-if="formData.schedule_enabled" class="mt-6 rounded-xl border border-dashed p-4 border-slate-200 bg-slate-50">
+            <div class="text-xs font-semibold tracking-wider text-amber-700">快捷预设：</div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <ui-tag
+                v-for="preset in cronPresets"
+                :key="preset.value"
+                class="cursor-pointer [transition-property:transform] hover:-translate-y-px"
+                @click="applyCronPreset(preset.value)"
+              >
+                {{ preset.label }}
+              </ui-tag>
+            </div>
+          </div>
+        </ui-card>
+      </template>
+
+      <template #aside>
+        <ui-card class="min-w-0 lg:sticky lg:top-[var(--space-6)]">
+          <template #title>
+            <div class="flex items-center gap-2">
+              <icon-info-circle class="h-5 w-5 text-[var(--accent)]" />
+              <span>Cron 表达式说明</span>
+            </div>
+          </template>
+
+          <div class="flex flex-col gap-4">
+            <div class="rounded-xl border p-5 border-slate-200 bg-slate-50 shadow-sm">
+              <code class="inline-flex rounded-lg px-3 py-1 text-sm font-semibold text-slate-700 bg-slate-100">* * * * *</code>
+              <div class="mt-4 flex flex-col gap-1 font-mono text-xs text-slate-500">
+                <span>│ │ │ │ │</span>
+                <span>│ │ │ │ └─ 星期几 (0-6, 0=周日)</span>
+                <span>│ │ │ └─── 月份 (1-12)</span>
+                <span>│ │ └───── 日期 (1-31)</span>
+                <span>│ └─────── 小时 (0-23)</span>
+                <span>└───────── 分钟 (0-59)</span>
+              </div>
+            </div>
+
+            <div>
+              <h4 class="mb-3 text-sm font-semibold text-slate-900">常用示例</h4>
+              <div class="flex flex-col gap-3">
+                <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
+                  <code class="text-slate-700 font-semibold">0 * * * *</code>
+                  <span class="text-slate-500 text-sm">每小时执行一次</span>
+                </div>
+                <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
+                  <code class="text-slate-700 font-semibold">0 0 * * *</code>
+                  <span class="text-slate-500 text-sm">每天 0 点执行</span>
+                </div>
+                <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
+                  <code class="text-slate-700 font-semibold">0 9 * * 1-5</code>
+                  <span class="text-slate-500 text-sm">工作日上午 9 点执行</span>
+                </div>
+                <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
+                  <code class="text-slate-700 font-semibold">*/30 * * * *</code>
+                  <span class="text-slate-500 text-sm">每 30 分钟执行一次</span>
+                </div>
+                <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
+                  <code class="text-slate-700 font-semibold">0 0 1 * *</code>
+                  <span class="text-slate-500 text-sm">每月 1 号 0 点执行</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ui-card>
+      </template>
+
+      <template #actions>
+        <FormActionBar
+          cancel-text="取消"
+          submit-text="创建任务"
+          submit-loading-text="创建中…"
+          :submit-loading="create.loading.value"
+          @cancel="handleCancel"
+          @submit="handleCreate"
         />
-
-        <!-- Cron 快捷预设 -->
-        <div v-if="formData.schedule_enabled" class="mt-6 rounded-xl border border-dashed p-4 border-slate-200 bg-slate-50">
-          <div class="text-xs font-semibold uppercase tracking-[0.08em] text-amber-700">快捷预设：</div>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <ui-tag
-              v-for="preset in cronPresets"
-              :key="preset.value"
-              class="cursor-pointer [transition-property:transform] hover:-translate-y-px"
-              @click="applyCronPreset(preset.value)"
-            >
-              {{ preset.label }}
-            </ui-tag>
-          </div>
-        </div>
-      </ui-card>
-
-      <!-- 说明卡片 -->
-      <ui-card class="min-w-0 lg:sticky lg:top-[var(--space-6)]">
-        <template #title>
-          <div class="flex items-center gap-2">
-            <icon-clock-circle class="h-5 w-5 text-[var(--accent)]" />
-            <span>Cron 表达式说明</span>
-          </div>
-        </template>
-
-        <div class="flex flex-col gap-4">
-          <div class="rounded-xl border p-5 border-slate-200 bg-slate-50 shadow-sm">
-            <code class="inline-flex rounded-lg px-3 py-1 text-sm font-semibold text-slate-700 bg-slate-100">* * * * *</code>
-            <div class="mt-4 flex flex-col gap-1 font-mono text-xs text-slate-500">
-              <span>│ │ │ │ │</span>
-              <span>│ │ │ │ └─ 星期几 (0-6, 0=周日)</span>
-              <span>│ │ │ └─── 月份 (1-12)</span>
-              <span>│ │ └───── 日期 (1-31)</span>
-              <span>│ └─────── 小时 (0-23)</span>
-              <span>└───────── 分钟 (0-59)</span>
-            </div>
-          </div>
-
-          <div>
-            <h4 class="mb-3 text-sm font-semibold text-slate-900">常用示例</h4>
-            <div class="flex flex-col gap-3">
-              <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
-                <code>0 * * * *</code>
-                <span>每小时执行一次</span>
-              </div>
-              <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
-                <code>0 0 * * *</code>
-                <span>每天 0 点执行</span>
-              </div>
-              <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
-                <code>0 9 * * 1-5</code>
-                <span>工作日上午 9 点执行</span>
-              </div>
-              <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
-                <code>*/30 * * * *</code>
-                <span>每 30 分钟执行一次</span>
-              </div>
-              <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm flex-col">
-                <code>0 0 1 * *</code>
-                <span>每月 1 号 0 点执行</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </ui-card>
-    </div>
-
-    <!-- 底部操作栏 -->
-    <div class="flex items-center justify-end gap-3 rounded-xl border px-5 py-4 sticky bottom-[var(--space-4)] z-10 border-slate-200 bg-slate-50 shadow-sm backdrop-blur-xl backdrop-saturate-150 max-md:flex-col max-md:items-stretch max-md:bottom-[var(--space-3)]">
-      <ui-button size="large" @click="handleCancel">
-        取消
-      </ui-button>
-      <ui-button
-        type="primary"
-        size="large"
-        :loading="create.loading.value"
-        @click="handleCreate"
-      >
-        <template #icon><icon-check /></template>
-        {{ create.loading.value ? "创建中..." : "创建任务" }}
-      </ui-button>
-    </div>
+      </template>
+    </FormPageLayout>
   </div>
 </template>

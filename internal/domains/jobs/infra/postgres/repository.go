@@ -6,21 +6,29 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
 	jobdomain "octomanger/internal/domains/jobs/domain"
+	"octomanger/internal/platform/dbutil"
 )
 
 var ErrNotFound = errors.New("job resource not found")
 
 type Repository struct {
-	db *gorm.DB
+	db  *gorm.DB
+	rdb *redis.Client
 }
 
-func New(db *gorm.DB) Repository {
-	return Repository{db: db}
+func New(db *gorm.DB, rdb ...*redis.Client) Repository {
+	var client *redis.Client
+	if len(rdb) > 0 {
+		client = rdb[0]
+	}
+	return Repository{db: db, rdb: client}
 }
 
 func (r Repository) ListDefinitions(ctx context.Context) ([]jobdomain.JobDefinition, error) {
@@ -65,7 +73,7 @@ func (r Repository) GetDefinition(ctx context.Context, definitionID int64) (*job
 }
 
 func (r Repository) CreateDefinition(ctx context.Context, input jobdomain.CreateDefinitionInput, nextRunAt *time.Time) (*jobdomain.JobDefinition, error) {
-	inputJSON, err := json.Marshal(normalizeMap(input.Input))
+	inputJSON, err := json.Marshal(dbutil.NormalizeMap(input.Input))
 	if err != nil {
 		return nil, fmt.Errorf("marshal definition input: %w", err)
 	}
@@ -106,32 +114,134 @@ func (r Repository) CreateDefinition(ctx context.Context, input jobdomain.Create
 	return r.GetDefinition(ctx, definitionID)
 }
 
+func (r Repository) PatchDefinition(ctx context.Context, id int64, input jobdomain.PatchDefinitionInput) (*jobdomain.JobDefinition, error) {
+	current, err := r.GetDefinition(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if input.Name != nil {
+		current.Name = *input.Name
+	}
+	if input.Input != nil {
+		current.Input = input.Input
+	}
+	if input.Enabled != nil {
+		current.Enabled = *input.Enabled
+	}
+
+	inputJSON, err := json.Marshal(dbutil.NormalizeMap(current.Input))
+	if err != nil {
+		return nil, fmt.Errorf("marshal definition input: %w", err)
+	}
+
+	txErr := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		result := tx.Exec(`
+			UPDATE job_definitions
+			SET name = $2, input_json = $3, enabled = $4, updated_at = NOW()
+			WHERE id = $1`,
+			id, current.Name, inputJSON, current.Enabled,
+		)
+		if result.Error != nil {
+			return fmt.Errorf("patch job definition: %w", result.Error)
+		}
+		if result.RowsAffected == 0 {
+			return ErrNotFound
+		}
+
+		if input.Schedule != nil {
+			zone := input.Schedule.Timezone
+			if zone == "" {
+				zone = "UTC"
+			}
+			result := tx.Exec(`
+				INSERT INTO schedules (job_definition_id, cron_expression, timezone, next_run_at, enabled)
+				VALUES ($1, $2, $3, NOW(), $4)
+				ON CONFLICT (job_definition_id) DO UPDATE SET
+					cron_expression = EXCLUDED.cron_expression,
+					timezone        = EXCLUDED.timezone,
+					enabled         = EXCLUDED.enabled,
+					updated_at      = NOW()`,
+				id, input.Schedule.CronExpression, zone, input.Schedule.Enabled,
+			)
+			if result.Error != nil {
+				return fmt.Errorf("upsert schedule: %w", result.Error)
+			}
+		}
+		return nil
+	})
+	if txErr != nil {
+		return nil, txErr
+	}
+
+	return r.GetDefinition(ctx, id)
+}
+
+func (r Repository) DeleteDefinition(ctx context.Context, id int64) error {
+	result := r.db.WithContext(ctx).Exec(`DELETE FROM job_definitions WHERE id = $1`, id)
+	if result.Error != nil {
+		return fmt.Errorf("delete job definition: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r Repository) EnqueueExecution(ctx context.Context, definitionID int64, requestedBy, source string, inputOverride map[string]any) (*jobdomain.JobExecution, error) {
 	definition, err := r.GetDefinition(ctx, definitionID)
 	if err != nil {
 		return nil, err
 	}
 
-	executionInputJSON, err := json.Marshal(mergeMaps(definition.Input, inputOverride))
+	executionInputJSON, err := json.Marshal(dbutil.MergeMaps(definition.Input, inputOverride))
 	if err != nil {
 		return nil, fmt.Errorf("marshal execution input: %w", err)
 	}
 
-	var executionID int64
+	// Use RETURNING to fetch all execution fields in one round-trip,
+	// avoiding a separate GetExecution query after the INSERT.
 	row := r.db.WithContext(ctx).Raw(`
 		INSERT INTO job_executions (job_definition_id, input_json, status, requested_by, source)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id`,
+		RETURNING id, job_definition_id,
+		          input_json, status, requested_by, source,
+		          COALESCE(worker_id, ''), COALESCE(summary, ''),
+		          result_json, COALESCE(error_message, ''),
+		          started_at, finished_at, created_at, updated_at`,
 		definitionID, executionInputJSON, jobdomain.StatusQueued, requestedBy, source,
 	).Row()
-	if err := row.Scan(&executionID); err != nil {
+
+	var exec jobdomain.JobExecution
+	var inputJSON, resultJSON []byte
+	var startedAt, finishedAt sql.NullTime
+	if err := row.Scan(
+		&exec.ID, &exec.JobDefinitionID,
+		&inputJSON, &exec.Status, &exec.RequestedBy, &exec.Source,
+		&exec.WorkerID, &exec.Summary,
+		&resultJSON, &exec.ErrorMessage,
+		&startedAt, &finishedAt, &exec.CreatedAt, &exec.UpdatedAt,
+	); err != nil {
 		return nil, fmt.Errorf("insert job execution: %w", err)
 	}
 
-	return r.GetExecution(ctx, executionID)
+	exec.DefinitionKey = definition.Key
+	exec.DefinitionName = definition.Name
+	exec.PluginKey = definition.PluginKey
+	exec.Action = definition.Action
+	exec.Input = dbutil.DecodeJSONMap(inputJSON)
+	exec.Result = dbutil.DecodeJSONMap(resultJSON)
+	exec.StartedAt = nullableTime(startedAt)
+	exec.FinishedAt = nullableTime(finishedAt)
+	r.invalidateExecutionCache(ctx, exec.ID)
+	r.writeExecutionCache(ctx, &exec)
+	return &exec, nil
 }
 
 func (r Repository) ListExecutions(ctx context.Context) ([]jobdomain.JobExecution, error) {
+	if items, ok := r.readExecutionsCache(ctx); ok {
+		return items, nil
+	}
 	rows, err := r.db.WithContext(ctx).Raw(baseExecutionQuery + ` ORDER BY e.created_at DESC`).Rows()
 	if err != nil {
 		return nil, fmt.Errorf("list job executions: %w", err)
@@ -146,15 +256,23 @@ func (r Repository) ListExecutions(ctx context.Context) ([]jobdomain.JobExecutio
 		}
 		items = append(items, item)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	r.writeExecutionsCache(ctx, items)
+	return items, nil
 }
 
 func (r Repository) GetExecution(ctx context.Context, executionID int64) (*jobdomain.JobExecution, error) {
+	if item, ok := r.readExecutionCache(ctx, executionID); ok {
+		return item, nil
+	}
 	row := r.db.WithContext(ctx).Raw(baseExecutionQuery+` WHERE e.id = $1`, executionID).Row()
 	item, err := scanExecution(row)
 	if err != nil {
 		return nil, err
 	}
+	r.writeExecutionCache(ctx, &item)
 	return &item, nil
 }
 
@@ -183,11 +301,12 @@ func (r Repository) ClaimNextQueuedExecution(ctx context.Context, workerID strin
 		return nil, fmt.Errorf("claim queued execution: %w", err)
 	}
 
+	r.invalidateExecutionCache(ctx, executionID)
 	return r.GetExecution(ctx, executionID)
 }
 
 func (r Repository) FinishExecution(ctx context.Context, executionID int64, status, summary string, result map[string]any, errorMessage string) error {
-	resultJSON, err := json.Marshal(normalizeMap(result))
+	resultJSON, err := json.Marshal(dbutil.NormalizeMap(result))
 	if err != nil {
 		return fmt.Errorf("marshal execution result: %w", err)
 	}
@@ -205,11 +324,12 @@ func (r Repository) FinishExecution(ctx context.Context, executionID int64, stat
 	if res.RowsAffected == 0 {
 		return ErrNotFound
 	}
+	r.invalidateExecutionCache(ctx, executionID)
 	return nil
 }
 
 func (r Repository) AppendLog(ctx context.Context, executionID int64, stream, eventType, message string, payload map[string]any) error {
-	payloadJSON, err := json.Marshal(normalizeMap(payload))
+	payloadJSON, err := json.Marshal(dbutil.NormalizeMap(payload))
 	if err != nil {
 		return fmt.Errorf("marshal job log payload: %w", err)
 	}
@@ -221,10 +341,58 @@ func (r Repository) AppendLog(ctx context.Context, executionID int64, stream, ev
 	if result.Error != nil {
 		return fmt.Errorf("append job log: %w", result.Error)
 	}
+	if err := r.trimExecutionLogs(ctx, executionID); err != nil {
+		return err
+	}
+	r.refreshExecutionLogsCache(ctx, executionID)
+	return nil
+}
+
+func (r Repository) AppendLogBatch(ctx context.Context, entries []jobdomain.JobLogEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	const cols = 5
+	args := make([]any, 0, len(entries)*cols)
+	placeholders := make([]string, len(entries))
+	for i, e := range entries {
+		base := i * cols
+		placeholders[i] = fmt.Sprintf("($%d,$%d,$%d,$%d,$%d)", base+1, base+2, base+3, base+4, base+5)
+		p, _ := json.Marshal(dbutil.NormalizeMap(e.Payload))
+		args = append(args, e.ExecutionID, e.Stream, e.EventType, e.Message, p)
+	}
+	query := "INSERT INTO job_logs (job_execution_id, stream, event_type, message, payload_json) VALUES " +
+		strings.Join(placeholders, ",")
+	if result := r.db.WithContext(ctx).Exec(query, args...); result.Error != nil {
+		return fmt.Errorf("append job log batch: %w", result.Error)
+	}
+	seen := make(map[int64]struct{}, len(entries))
+	for _, entry := range entries {
+		if _, ok := seen[entry.ExecutionID]; ok {
+			continue
+		}
+		seen[entry.ExecutionID] = struct{}{}
+		if err := r.trimExecutionLogs(ctx, entry.ExecutionID); err != nil {
+			return err
+		}
+		r.refreshExecutionLogsCache(ctx, entry.ExecutionID)
+	}
 	return nil
 }
 
 func (r Repository) ListLogsAfter(ctx context.Context, executionID, afterID int64) ([]jobdomain.JobLog, error) {
+	if items, ok := r.readExecutionLogsCache(ctx, executionID); ok {
+		filtered := make([]jobdomain.JobLog, 0, len(items))
+		for _, item := range items {
+			if item.ID > afterID {
+				filtered = append(filtered, item)
+			}
+		}
+		if len(filtered) > jobLogRetentionLimit {
+			return filtered[:jobLogRetentionLimit], nil
+		}
+		return filtered, nil
+	}
 	rows, err := r.db.WithContext(ctx).Raw(`
 		SELECT id, job_execution_id, stream, event_type, message, payload_json, created_at
 		FROM job_logs
@@ -243,10 +411,14 @@ func (r Repository) ListLogsAfter(ctx context.Context, executionID, afterID int6
 		if err := rows.Scan(&item.ID, &item.JobExecutionID, &item.Stream, &item.EventType, &item.Message, &payloadJSON, &item.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan execution log: %w", err)
 		}
-		item.Payload = decodeJSONMap(payloadJSON)
+		item.Payload = dbutil.DecodeJSONMap(payloadJSON)
 		items = append(items, item)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	r.refreshExecutionLogsCache(ctx, executionID)
+	return items, nil
 }
 
 func (r Repository) ClaimNextDueSchedule(ctx context.Context, workerID string, leaseDuration time.Duration) (*jobdomain.Schedule, error) {
@@ -342,7 +514,7 @@ func scanDefinition(row scanner) (jobdomain.JobDefinition, error) {
 		return jobdomain.JobDefinition{}, fmt.Errorf("scan job definition: %w", err)
 	}
 
-	item.Input = decodeJSONMap(inputJSON)
+	item.Input = dbutil.DecodeJSONMap(inputJSON)
 	if scheduleID.Valid {
 		item.Schedule = &jobdomain.Schedule{
 			ID:              scheduleID.Int64,
@@ -379,38 +551,11 @@ func scanExecution(row scanner) (jobdomain.JobExecution, error) {
 		return jobdomain.JobExecution{}, fmt.Errorf("scan job execution: %w", err)
 	}
 
-	item.Input = decodeJSONMap(inputJSON)
-	item.Result = decodeJSONMap(resultJSON)
+	item.Input = dbutil.DecodeJSONMap(inputJSON)
+	item.Result = dbutil.DecodeJSONMap(resultJSON)
 	item.StartedAt = nullableTime(startedAt)
 	item.FinishedAt = nullableTime(finishedAt)
 	return item, nil
-}
-
-func decodeJSONMap(raw []byte) map[string]any {
-	if len(raw) == 0 {
-		return map[string]any{}
-	}
-	v := map[string]any{}
-	_ = json.Unmarshal(raw, &v)
-	return v
-}
-
-func normalizeMap(value map[string]any) map[string]any {
-	if value == nil {
-		return map[string]any{}
-	}
-	return value
-}
-
-func mergeMaps(base, override map[string]any) map[string]any {
-	merged := map[string]any{}
-	for k, v := range normalizeMap(base) {
-		merged[k] = v
-	}
-	for k, v := range normalizeMap(override) {
-		merged[k] = v
-	}
-	return merged
 }
 
 func nullableTime(v sql.NullTime) *time.Time {

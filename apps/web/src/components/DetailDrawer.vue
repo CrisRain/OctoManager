@@ -106,71 +106,97 @@ function handleRefresh() {
   >
     <!-- Header -->
     <div class="flex flex-shrink-0 items-center justify-between border-b border-slate-200 bg-slate-50 px-6 py-5">
-      <div class="flex min-w-0 flex-1 items-center gap-2.5">
-        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/20" @click="handleClose">
-          <icon-close />
+      <div class="flex min-w-0 flex-1 items-center gap-3">
+        <!-- 44px tap zone via before: -->
+        <button
+          type="button"
+          aria-label="关闭详情面板"
+          class="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-400 transition-all hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 focus-visible:ring-offset-1 before:absolute before:-inset-[4px] before:content-['']"
+          @click="handleClose"
+        >
+          <icon-close aria-hidden="true" />
         </button>
-        <div class="flex flex-col gap-0.5">
-          <h2 class="m-0 text-[18px] font-semibold tracking-[-0.03em] text-slate-900">{{ title || "详情" }}</h2>
+        <div class="flex flex-col gap-1">
+          <h2 class="m-0 text-lg font-semibold tracking-[-0.03em] text-slate-900">{{ title || "详情" }}</h2>
           <p v-if="$slots.subtitle" class="text-xs text-slate-500">
             <slot name="subtitle" />
           </p>
         </div>
       </div>
 
-      <div v-if="showActions" class="flex flex-shrink-0 flex-wrap items-center justify-end gap-2.5 max-md:w-full max-md:justify-start">
-        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/20" @click="handleRefresh" :disabled="loading">
-          <icon-refresh />
+      <div v-if="showActions" class="flex flex-shrink-0 flex-wrap items-center justify-end gap-3 max-md:w-full max-md:justify-start">
+        <button
+          type="button"
+          aria-label="刷新"
+          :disabled="loading"
+          class="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-40 before:absolute before:-inset-[4px] before:content-['']"
+          @click="handleRefresh"
+        >
+          <icon-refresh aria-hidden="true" />
         </button>
-        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/20" @click="handleEdit">
-          <icon-edit />
+        <button
+          type="button"
+          aria-label="编辑"
+          class="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 focus-visible:ring-offset-1 before:absolute before:-inset-[4px] before:content-['']"
+          @click="handleEdit"
+        >
+          <icon-edit aria-hidden="true" />
         </button>
-        <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-all hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/20" @click="handleDelete">
-          <icon-delete />
+        <button
+          type="button"
+          aria-label="删除"
+          class="relative inline-flex h-9 w-9 items-center justify-center rounded-lg text-slate-500 transition-all hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/50 focus-visible:ring-offset-1 before:absolute before:-inset-[4px] before:content-['']"
+          @click="handleDelete"
+        >
+          <icon-delete aria-hidden="true" />
         </button>
       </div>
     </div>
 
     <!-- Tabs -->
-    <div v-if="resolvedTabs.length" class="flex flex-shrink-0 items-center gap-1 border-b border-slate-200 px-4 py-2 bg-slate-50/50">
+    <div
+      v-if="resolvedTabs.length"
+      role="tablist"
+      :aria-label="title ? `${title} 标签页` : '详情标签页'"
+      class="flex flex-shrink-0 items-center gap-1 border-b border-slate-200 bg-slate-50/50 px-4 py-2"
+    >
       <button type="button"
         v-for="tab in resolvedTabs"
         :key="tab.key"
-        class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-transparent bg-transparent px-4 py-2 text-[14px] font-medium text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/20"
+        role="tab"
+        :aria-selected="currentTab === tab.key"
+        :aria-controls="`drawer-panel-${tab.key}`"
+        class="flex cursor-pointer items-center gap-2 rounded-lg border border-transparent bg-transparent px-4 py-2 text-[14px] font-medium text-slate-500 transition-all hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 focus-visible:ring-offset-1"
         :class="{ 'bg-white shadow-sm border-slate-200 text-[var(--accent)] font-semibold': currentTab === tab.key }"
         @click="setTab(tab.key)"
       >
-        <component v-if="tab.icon" :is="tab.icon" class="h-3.5 w-3.5" />
+        <component v-if="tab.icon" :is="tab.icon" class="h-3.5 w-3.5" aria-hidden="true" />
         {{ tab.label }}
       </button>
     </div>
 
-    <!-- Body -->
+    <!-- Body: keyed Transition for tab fade -->
     <div class="flex-1 overflow-y-auto p-6">
       <ui-spin v-if="loading" :loading="true" tip="加载中..." class="flex items-center justify-center py-12" />
 
-      <div
-        v-for="tab in resolvedTabs"
-        v-show="currentTab === tab.key && !loading"
-        :key="tab.key"
-        class="drawer-panel"
-      >
-        <slot :name="tab.key">
-          <ui-empty
-            v-if="tab.key === 'activity'"
-            description="暂无活动记录"
-          />
-          <ui-empty
-            v-else-if="tab.key === 'settings'"
-            description="暂无可设置项"
-          />
-          <div v-else class="py-8 text-center text-sm text-slate-500">暂无内容</div>
-        </slot>
-      </div>
+      <Transition v-else name="tab-fade" mode="out-in">
+        <div
+          :key="currentTab"
+          role="tabpanel"
+          :id="`drawer-panel-${currentTab}`"
+          class="drawer-panel"
+        >
+          <slot :name="currentTab">
+            <ui-empty v-if="currentTab === 'activity'" description="暂无活动记录" />
+            <ui-empty v-else-if="currentTab === 'settings'" description="暂无可设置项" />
+            <div v-else class="py-8 text-center text-sm text-slate-500">暂无内容</div>
+          </slot>
+        </div>
+      </Transition>
     </div>
 
     <!-- Footer -->
-    <div v-if="$slots.footer" class="flex flex-shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-white/[58%] px-5 py-4">
+    <div v-if="$slots.footer" class="flex flex-shrink-0 items-center justify-end gap-2 border-t border-slate-200 bg-white/60 px-5 py-4">
       <slot name="footer" />
     </div>
   </ui-drawer>

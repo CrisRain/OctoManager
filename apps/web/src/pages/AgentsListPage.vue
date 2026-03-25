@@ -6,10 +6,11 @@ import {
   IconEdit, IconDelete
 } from "@/lib/icons";
 
-import { PageHeader, SmartListBar, RowActionsMenu, DetailDrawer, StatusTag } from "@/components/index";
-import { useAgents, useStartAgent, useStopAgent } from "@/composables/useAgents";
+import { PageHeader, SmartListBar, RowActionsMenu, StatusTag } from "@/components/index";
+import { useAgents, useDeleteAgent, useStartAgent, useStopAgent } from "@/composables/useAgents";
 import { useMessage, useConfirm, useErrorHandler } from "@/composables";
 import { to } from "@/router/registry";
+import type { Agent } from "@/types";
 
 const router = useRouter();
 const message = useMessage();
@@ -19,6 +20,7 @@ const { withErrorHandler } = useErrorHandler();
 const { data: agents, loading, refresh } = useAgents();
 const startAgent = useStartAgent();
 const stopAgent = useStopAgent();
+const deleteAgentAction = useDeleteAgent();
 
 // 状态筛选
 const statusFilter = ref<string>();
@@ -61,10 +63,10 @@ const currentAgent = computed(() =>
 );
 
 // 快速操作
-async function handleQuickAction(key: string, agent: any) {
+async function handleQuickAction(key: string, agent: Agent) {
   switch (key) {
     case "view":
-      showAgentDetail(agent);
+      router.push(to.agents.detail(agent.id));
       break;
     case "start":
       await handleStart(agent.id);
@@ -76,15 +78,9 @@ async function handleQuickAction(key: string, agent: any) {
       router.push(to.agents.edit(agent.id));
       break;
     case "delete":
-      await deleteAgent(agent);
+      await handleDeleteAgent(agent);
       break;
   }
-}
-
-// 显示详情抽屉
-function showAgentDetail(agent: any) {
-  currentAgentId.value = agent.id;
-  drawerVisible.value = true;
 }
 
 // 启动 Agent
@@ -112,37 +108,46 @@ async function handleStop(id: number) {
 }
 
 // 删除 Agent
-async function deleteAgent(agent: any) {
+async function handleDeleteAgent(agent: Agent) {
   const confirmed = await confirm.confirmDelete(agent.name);
   if (!confirmed) return;
 
   await withErrorHandler(
     async () => {
-      // TODO: 调用API删除
+      await deleteAgentAction.execute(agent.id);
       message.success(`已删除 Agent: ${agent.name}`);
+      if (currentAgentId.value === agent.id) {
+        drawerVisible.value = false;
+        currentAgentId.value = null;
+      }
       await refresh();
     },
     { action: "删除", showSuccess: true }
   );
 }
 
-// 批量操作
-async function handleBatchStop(items: any[]) {
-  const confirmed = await confirm.confirm(`确定要停止选中的 ${items.length} 个 Agent 吗？`);
+// 批量删除
+async function handleBatchDelete(items: Agent[]) {
+  if (!items.length) return;
+  const confirmed = await confirm.confirm(`确定要删除选中的 ${items.length} 个 Agent 吗？`);
   if (!confirmed) return;
 
   await withErrorHandler(
     async () => {
-      // TODO: 调用批量停止API
-      message.success(`已向 ${items.length} 个 Agent 发送停止指令`);
+      await Promise.all(items.map((item) => deleteAgentAction.execute(item.id)));
+      message.success(`已删除 ${items.length} 个 Agent`);
+      if (currentAgentId.value !== null && items.some((item) => item.id === currentAgentId.value)) {
+        drawerVisible.value = false;
+        currentAgentId.value = null;
+      }
       await refresh();
     },
-    { action: "批量停止", showSuccess: true }
+    { action: "批量删除", showSuccess: true }
   );
 }
 
 // 批量导出
-async function handleBatchExport(items: any[]) {
+async function handleBatchExport(items: Agent[]) {
   const data = JSON.stringify(items, null, 2);
   const blob = new Blob([data], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -178,7 +183,7 @@ async function handleBatchExport(items: any[]) {
       :loading="loading"
       v-model:search="searchKeyword"
       @refresh="refresh"
-      @batch-delete="handleBatchStop"
+      @batch-delete="handleBatchDelete"
       @batch-export="handleBatchExport"
     >
       <template #filters>
@@ -215,6 +220,13 @@ async function handleBatchExport(items: any[]) {
         :row-selection="{ type: 'checkbox' }"
       >
         <template #columns>
+          <!-- ID -->
+          <ui-table-column title="ID" width="80">
+            <template #cell="{ record }">
+              <code class="text-xs font-mono font-semibold text-slate-500">#{{ record.id }}</code>
+            </template>
+          </ui-table-column>
+
           <ui-table-column title="名称" data-index="name">
             <template #cell="{ record }">
               <div class="flex items-center gap-3">
@@ -285,6 +297,7 @@ async function handleBatchExport(items: any[]) {
       <ui-card
         v-for="record in filteredAgents"
         :key="record.id"
+        v-memo="[record.id, record.name, record.plugin_key, record.action, record.runtime_state, record.desired_state]"
         class="rounded-xl border p-5 border-slate-200 bg-white shadow-sm"
       >
         <div class="mb-3 flex items-center gap-3">
@@ -298,7 +311,7 @@ async function handleBatchExport(items: any[]) {
           <div class="flex min-w-0 flex-1 flex-col gap-0.5">
             <div class="truncate text-sm font-semibold text-slate-900">{{ record.name }}</div>
             <div class="text-xs text-slate-500">
-              <code class="font-mono text-xs text-slate-500">{{ record.plugin_key }}:{{ record.action }}</code>
+              <code class="font-mono text-xs text-slate-500">#{{ record.id }} · {{ record.plugin_key }}:{{ record.action }}</code>
             </div>
           </div>
           <RowActionsMenu
@@ -337,7 +350,7 @@ async function handleBatchExport(items: any[]) {
 
       <ui-card
         v-if="!loading && !filteredAgents.length"
-        class="rounded-xl border border-slate-200 bg-white shadow-sm px-5 py-8"
+        class="col-span-full empty-state-block"
       >
         <ui-empty description="暂无 Agent">
           <ui-button type="primary" @click="router.push(to.agents.create())">
@@ -346,98 +359,5 @@ async function handleBatchExport(items: any[]) {
         </ui-empty>
       </ui-card>
     </div>
-
-    <!-- 详情抽屉 -->
-    <DetailDrawer
-      v-model:open="drawerVisible"
-      :title="currentAgent?.name"
-      :loading="loading"
-      @refresh="refresh"
-      @edit="currentAgent && router.push(to.agents.edit(currentAgent.id))"
-      @delete="currentAgent && deleteAgent(currentAgent)"
-    >
-      <template #detail>
-        <div class="rounded-xl border p-4 border-slate-200 bg-white/[56%]">
-          <h4 class="mb-3 text-sm font-semibold text-slate-900">基本信息</h4>
-
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Agent ID</span>
-            <span class="text-sm font-medium text-slate-900">
-              <code>{{ currentAgent?.id }}</code>
-            </span>
-          </div>
-
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">名称</span>
-            <span class="text-sm font-medium text-slate-900">{{ currentAgent?.name }}</span>
-          </div>
-
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">插件</span>
-            <span class="text-sm font-medium text-slate-900">
-              <code class="inline-flex items-center rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-mono text-slate-600">{{ currentAgent?.plugin_key }}</code>
-            </span>
-          </div>
-
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">动作</span>
-            <span class="text-sm font-medium text-slate-900">
-              <span class="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-slate-600">{{ currentAgent?.action }}</span>
-            </span>
-          </div>
-
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">运行状态</span>
-            <span class="text-sm font-medium text-slate-900">
-              <StatusTag v-if="currentAgent" :status="currentAgent.runtime_state" />
-            </span>
-          </div>
-
-          <div class="flex items-start justify-between gap-4 border-b border-slate-100 py-3 first:pt-0 last:border-b-0 last:pb-0 max-md:flex-col max-md:items-start">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">期望状态</span>
-            <span class="text-sm font-medium text-slate-900">{{ currentAgent?.desired_state }}</span>
-          </div>
-        </div>
-
-        <div class="rounded-xl border p-4 border-slate-200 bg-white/[56%]" v-if="currentAgent?.input">
-          <h4 class="mb-3 text-sm font-semibold text-slate-900">输入参数</h4>
-          <pre class="overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-4 text-xs leading-6 text-slate-300 whitespace-pre-wrap break-all">{{ JSON.stringify(currentAgent.input, null, 2) }}</pre>
-        </div>
-
-        <div class="rounded-xl border p-4 border-slate-200 bg-white/[56%]" v-if="currentAgent?.last_error">
-          <h4 class="mb-3 text-sm font-semibold text-slate-900">错误信息</h4>
-          <div class="mt-2 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 p-4">
-            <icon-close-circle class="h-4 w-4 flex-shrink-0 text-red-500 mt-0.5" />
-            <span class="text-sm text-red-600">{{ currentAgent.last_error }}</span>
-          </div>
-        </div>
-      </template>
-
-      <template #footer>
-        <div class="flex w-full items-center justify-end gap-2">
-          <ui-button
-            type="outline"
-            :loading="startAgent.loading.value"
-            :disabled="currentAgent?.runtime_state === 'running' || currentAgent?.desired_state === 'running'"
-            @click="currentAgent && handleStart(currentAgent.id)"
-          >
-            <template #icon><icon-play-arrow /></template>
-            启动
-          </ui-button>
-          <ui-button
-            status="danger"
-            :loading="stopAgent.loading.value"
-            :disabled="currentAgent?.runtime_state === 'stopped' || currentAgent?.desired_state === 'stopped'"
-            @click="currentAgent && handleStop(currentAgent.id)"
-          >
-            <template #icon><icon-stop /></template>
-            停止
-          </ui-button>
-          <ui-button type="primary" @click="currentAgent && router.push(to.agents.detail(currentAgent.id))">
-            查看详情
-          </ui-button>
-        </div>
-      </template>
-    </DetailDrawer>
   </div>
 </template>

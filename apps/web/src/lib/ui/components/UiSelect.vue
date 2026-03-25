@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, useAttrs } from "vue";
+import { computed, useAttrs, ref, provide, onMounted, onBeforeUnmount, reactive } from "vue";
 import { cx, optionValue } from "../utils";
 
 interface Props {
@@ -27,31 +27,81 @@ const emit = defineEmits<{
 }>();
 
 const attrs = useAttrs();
+const isOpen = ref(false);
+const selectRef = ref<HTMLElement | null>(null);
+const dropdownStyle = ref({});
+
+function updateDropdownPosition() {
+  if (!selectRef.value) return;
+  const rect = selectRef.value.getBoundingClientRect();
+  dropdownStyle.value = {
+    top: `${rect.bottom + 4}px`,
+    left: `${rect.left}px`,
+    width: `${rect.width}px`
+  };
+}
 
 const wrapperClass = computed(() =>
   cx(
-    "ui-select-view relative flex items-center rounded-lg border border-slate-200 bg-white px-3 shadow-sm transition-all hover:border-slate-300 focus-within:ring-2 focus-within:ring-slate-400/20",
-    "focus-within:border-accent focus-within:shadow-input-focus",
+    "ui-select-view relative flex items-center rounded-lg border border-slate-200 bg-white px-3 shadow-sm transition-all hover:border-slate-300",
+    isOpen.value && "ring-2 ring-slate-400/20 border-[var(--accent)] shadow-input-focus",
     !props.multiple && "ui-select-view-single",
-    props.disabled && "bg-white/50 opacity-60",
+    props.disabled && "bg-white/50 opacity-60 cursor-not-allowed",
     attrs.class as string,
   ),
 );
 
+// Map of value -> label
+const optionsMap = reactive(new Map<unknown, string>());
+
+provide('ui-select-context', {
+  modelValue: computed(() => props.modelValue),
+  multiple: props.multiple,
+  registerOption: (value: unknown, label: string) => {
+    optionsMap.set(value, label);
+  },
+  unregisterOption: (value: unknown) => {
+    optionsMap.delete(value);
+  },
+  selectOption: (value: unknown) => {
+    if (props.multiple) {
+      const current = Array.isArray(props.modelValue) ? [...props.modelValue] : [];
+      const idx = current.indexOf(value);
+      if (idx >= 0) current.splice(idx, 1);
+      else current.push(value);
+      emit("update:modelValue", current);
+      emit("change", current);
+    } else {
+      emit("update:modelValue", value);
+      emit("change", value);
+      isOpen.value = false;
+    }
+  }
+});
+
+const displayLabel = computed(() => {
+  if (props.multiple) {
+    const vals = Array.isArray(props.modelValue) ? props.modelValue : [];
+    if (vals.length === 0) return props.placeholder;
+    return vals.map(v => optionsMap.get(v) || String(v)).join(', ');
+  }
+  if (props.modelValue === '' || props.modelValue == null) return props.placeholder;
+  return optionsMap.get(props.modelValue) || String(props.modelValue);
+});
+
 const showClear = computed(() => props.allowClear && !props.multiple && props.modelValue);
 
-function onChange(event: Event) {
-  const target = event.target as HTMLSelectElement;
-  if (props.multiple) {
-    const values = Array.from(target.selectedOptions).map(optionValue);
-    emit("update:modelValue", values);
-    emit("change", values);
-    return;
+function toggleOpen(e: Event) {
+  if (props.disabled) return;
+  // If the target is the clear button, don't toggle
+  if ((e.target as HTMLElement).closest('.clear-btn')) return;
+  isOpen.value = !isOpen.value;
+  if (isOpen.value) {
+    updateDropdownPosition();
+    emit('focus', e as FocusEvent);
+  } else {
+    emit('blur', e as FocusEvent);
   }
-  const selected = target.options[target.selectedIndex];
-  const next = selected ? optionValue(selected) : target.value;
-  emit("update:modelValue", next);
-  emit("change", next);
 }
 
 function onClear(event: MouseEvent) {
@@ -60,39 +110,60 @@ function onClear(event: MouseEvent) {
   emit("update:modelValue", "");
   emit("change", "");
   emit("clear");
+  isOpen.value = false;
 }
+
+function handleClickOutside(event: MouseEvent) {
+  if (selectRef.value && !selectRef.value.contains(event.target as Node)) {
+    if (isOpen.value) {
+      isOpen.value = false;
+      emit('blur', event as any);
+    }
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside);
+  window.addEventListener('resize', updateDropdownPosition);
+  window.addEventListener('scroll', updateDropdownPosition, true);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside);
+  window.removeEventListener('resize', updateDropdownPosition);
+  window.removeEventListener('scroll', updateDropdownPosition, true);
+});
 </script>
 
 <template>
-  <div v-bind="{ ...attrs, class: undefined }" :class="wrapperClass">
-    <select
-      class="min-h-[2.85em] w-full appearance-none border-0 bg-transparent pr-8 text-sm font-medium tracking-[-0.01em] text-slate-900 outline-none"
-      :value="(modelValue ?? '') as never"
-      :disabled="disabled"
-      :multiple="multiple"
-      @change="onChange"
-      @focus="emit('focus', $event)"
-      @blur="emit('blur', $event)"
-    >
-      <option
-        v-if="placeholder && !multiple"
-        value=""
-        disabled
-        :selected="modelValue === '' || modelValue == null"
-      >
-        {{ placeholder }}
-      </option>
-      <slot />
-    </select>
+  <div ref="selectRef" v-bind="{ ...attrs, class: undefined }" :class="wrapperClass" @click="toggleOpen">
+    <div class="min-h-[2.85em] w-full flex items-center pr-8 text-sm font-medium tracking-[-0.01em] text-slate-900 outline-none cursor-pointer">
+      <span :class="{'text-slate-400 font-normal': displayLabel === placeholder && (modelValue === '' || modelValue == null)}" class="truncate block w-full text-left">
+        {{ displayLabel }}
+      </span>
+    </div>
 
     <button
       v-if="showClear"
       type="button"
-      class="mr-1 rounded-full bg-slate-100/85 px-2 py-1 text-slate-400 transition hover:bg-white hover:text-slate-700"
-      @click="onClear"
+      class="clear-btn absolute right-8 mr-1 rounded-full bg-slate-100/85 px-2 py-1 text-slate-400 transition hover:bg-white hover:text-slate-700"
+      @click.stop="onClear"
     >
       ×
     </button>
-    <span v-else class="pointer-events-none absolute right-4 text-slate-400">▾</span>
+    <span v-else class="pointer-events-none absolute right-4 text-slate-400 transition-transform" :class="{'rotate-180': isOpen}">▾</span>
+    
+    <!-- Dropdown menu -->
+    <Teleport to="body">
+      <div 
+        v-show="isOpen" 
+        class="fixed z-[9999] max-h-60 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 shadow-lg cursor-default" 
+        :style="dropdownStyle"
+        @click.stop
+      >
+        <slot />
+        <div v-if="!$slots.default" class="px-3 py-2 text-sm text-slate-400 text-center">暂无选项</div>
+      </div>
+    </Teleport>
   </div>
 </template>

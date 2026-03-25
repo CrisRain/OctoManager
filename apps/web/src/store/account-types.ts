@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { createAccountType, deleteAccountType, listAccountTypes } from "@/api";
-import type { AccountType, AccountTypeCreateInput } from "@/types";
+import { createAccountType, deleteAccountType, listAccountTypes, patchAccountType } from "@/api";
+import type { AccountType, AccountTypeCreateInput, AccountTypePatchInput } from "@/types";
 import { normalizeListResponse } from "@/utils/normalizeListResponse";
 
 export const useAccountTypesStore = defineStore("accountTypes", () => {
@@ -27,6 +27,12 @@ export const useAccountTypesStore = defineStore("accountTypes", () => {
     return result;
   }
 
+  async function patch(key: string, payload: AccountTypePatchInput) {
+    const result = await patchAccountType(key, payload);
+    accountTypes.value = accountTypes.value.map((t) => (t.key === key ? result : t));
+    return result;
+  }
+
   async function remove(key: string) {
     await deleteAccountType(key);
     accountTypes.value = accountTypes.value.filter((item) => item.key !== key);
@@ -38,6 +44,7 @@ export const useAccountTypesStore = defineStore("accountTypes", () => {
     error,
     fetchAccountTypes,
     create,
+    patch,
     remove,
   };
 });

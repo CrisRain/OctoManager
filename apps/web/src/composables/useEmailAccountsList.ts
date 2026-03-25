@@ -115,7 +115,7 @@ export function useEmailAccountsList() {
 
     await withErrorHandler(
       async () => {
-        // TODO: 调用批量删除API
+        await Promise.all(items.map((item) => deleteAccountAction.execute(item.id)));
         message.success(`已删除 ${items.length} 个邮箱账号`);
         await refresh();
       },

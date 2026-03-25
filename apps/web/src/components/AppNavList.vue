@@ -34,35 +34,34 @@ const isChildActive = (to: string): boolean => {
 </script>
 
 <template>
-  <nav class="flex w-full flex-1 flex-col gap-0.5 dark-scroll">
+  <nav class="dark-scroll flex w-full flex-1 flex-col gap-2">
     <template v-for="item in props.items" :key="item.to">
       <router-link
         :to="item.to"
-        class="relative flex items-center gap-3 rounded-lg px-3 py-2 text-[14px] font-medium no-underline transition-all hover:bg-slate-100/80 hover:text-slate-900 text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/20"
+        class="group relative flex items-center gap-3 rounded-lg px-4 py-3 text-[14px] font-semibold no-underline transition-all duration-200 hover:scale-[1.02] hover:bg-white/14 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--sidebar-bg)]"
         :class="isActive(item.to)
-          ? 'bg-[var(--accent)]/8 text-[var(--accent)] font-semibold'
-          : ''"
+          ? 'bg-white text-[var(--accent)]'
+          : 'text-[var(--sidebar-text-strong)]'"
         @click="emit('navigate')"
       >
-        <!-- Active left indicator bar -->
         <span
           v-if="isActive(item.to)"
-          class="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-full bg-[var(--accent)]"
+          class="absolute inset-y-3 left-0 w-1 rounded-r-md bg-[var(--highlight)]"
         />
         <component
           :is="item.icon"
-          class="h-[18px] w-[18px] flex-shrink-0 transition-colors"
-          :class="isActive(item.to) ? 'text-[var(--accent)]' : 'text-slate-400'"
+          class="h-[18px] w-[18px] flex-shrink-0 transition-transform duration-200 group-hover:scale-110"
+          :class="isActive(item.to) ? 'text-[var(--accent)]' : 'text-[var(--sidebar-icon)]'"
         />
         <span>{{ item.label }}</span>
       </router-link>
-      <div v-if="item.children?.length" class="mt-0.5 flex w-full flex-col gap-0.5">
+      <div v-if="item.children?.length" class="ml-6 flex w-full flex-col gap-1 border-l-2 border-white/20 pl-3">
         <router-link
           v-for="child in item.children"
           :key="child.to"
           :to="child.to"
-          class="flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-[13px] font-medium no-underline transition-all hover:bg-slate-100/80 hover:text-slate-900 text-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/20 ml-7"
-          :class="isChildActive(child.to) ? 'bg-[var(--accent)]/8 text-[var(--accent)] font-semibold' : ''"
+          class="rounded-md px-3 py-2 text-[13px] font-medium no-underline transition-all duration-200 hover:scale-[1.02] hover:bg-white/12 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--sidebar-bg)]"
+          :class="isChildActive(child.to) ? 'bg-white/16 text-white' : 'text-[var(--sidebar-text)]'"
           @click="emit('navigate')"
         >
           {{ child.label }}

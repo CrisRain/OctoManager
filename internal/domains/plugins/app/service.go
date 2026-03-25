@@ -4,32 +4,59 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	plugindomain "octomanger/internal/domains/plugins/domain"
 )
+
+const scannerMaxTokenSize = 4 * 1024 * 1024 // 4MB
 
 type Repository interface {
 	List(ctx context.Context) ([]plugindomain.Plugin, error)
 	Get(ctx context.Context, key string) (*plugindomain.Plugin, error)
 }
 
+type SettingsStore interface {
+	GetConfig(ctx context.Context, key string) (json.RawMessage, error)
+}
+
+type ExecutionTimeouts struct {
+	Account time.Duration
+	Job     time.Duration
+	Agent   time.Duration
+}
+
 type Service struct {
-	repo      Repository
-	pythonBin string
-	sdkDir    string
+	repo              Repository
+	pythonBin         string
+	sdkDir            string
+	settingsStore     SettingsStore
+	executionTimeouts ExecutionTimeouts
 }
 
 func New(repo Repository, pythonBin string, sdkDir string) Service {
 	return Service{
-		repo:      repo,
-		pythonBin: strings.TrimSpace(pythonBin),
-		sdkDir:    strings.TrimSpace(sdkDir),
+		repo:              repo,
+		pythonBin:         strings.TrimSpace(pythonBin),
+		sdkDir:            strings.TrimSpace(sdkDir),
+		executionTimeouts: defaultExecutionTimeouts(),
 	}
+}
+
+func (s Service) WithSettingsStore(store SettingsStore) Service {
+	s.settingsStore = store
+	return s
+}
+
+func (s Service) WithExecutionTimeouts(timeouts ExecutionTimeouts) Service {
+	s.executionTimeouts = normalizeExecutionTimeouts(timeouts)
+	return s
 }
 
 func (s Service) List(ctx context.Context) ([]plugindomain.Plugin, error) {
@@ -103,13 +130,26 @@ func (s Service) Execute(
 		return err
 	}
 
+	request, err = s.injectSettings(ctx, pluginKey, request)
+	if err != nil {
+		return err
+	}
+
 	payload, err := json.Marshal(request)
 	if err != nil {
 		return fmt.Errorf("marshal plugin request: %w", err)
 	}
 
+	execCtx := ctx
+	timeout := s.executionTimeoutForRequest(request)
+	cancel := func() {}
+	if timeout > 0 {
+		execCtx, cancel = context.WithTimeout(ctx, timeout)
+	}
+	defer cancel()
+
 	entrypoint := plugin.Manifest.Entrypoint
-	command := exec.CommandContext(ctx, s.pythonBinary(), entrypoint)
+	command := exec.CommandContext(execCtx, s.pythonBinary(), entrypoint)
 	command.Dir = plugin.Directory
 	command.Env = append(command.Environ(), fmt.Sprintf("PYTHONPATH=%s", s.pythonPath()))
 
@@ -126,17 +166,17 @@ func (s Service) Execute(
 
 	var receivedError bool
 	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 64*1024), scannerMaxTokenSize)
+	var warnedDeprecatedStatus bool
 	for scanner.Scan() {
 		line := scanner.Bytes()
-		var event plugindomain.ExecutionEvent
-		if err := json.Unmarshal(line, &event); err != nil {
-			// Non-JSON output (e.g. Python traceback on stderr) — forward as a log event
-			// so callers can surface the raw text rather than getting an opaque decode error.
-			if onEvent != nil {
-				onEvent(plugindomain.ExecutionEvent{Type: "log", Message: string(line)})
-			}
-			continue
+
+		event, usesDeprecatedStatus := decodeExecutionEventLine(line)
+		if usesDeprecatedStatus && !warnedDeprecatedStatus {
+			warnedDeprecatedStatus = true
+			fmt.Fprintf(os.Stderr, "WARN: plugin %q emitted deprecated status-based events; migrate to type-based event protocol\n", pluginKey)
 		}
+
 		if event.Type == "error" {
 			receivedError = true
 		}
@@ -146,10 +186,20 @@ func (s Service) Execute(
 	}
 
 	if err := scanner.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			return fmt.Errorf("read plugin output: line exceeds %d bytes", scannerMaxTokenSize)
+		}
 		return fmt.Errorf("read plugin output: %w", err)
 	}
 
 	if err := command.Wait(); err != nil {
+		if timeout > 0 && errors.Is(execCtx.Err(), context.DeadlineExceeded) {
+			message := fmt.Sprintf("plugin execution timed out after %s", timeout)
+			if onEvent != nil {
+				onEvent(plugindomain.ExecutionEvent{Type: "error", Message: message, Error: "TIMEOUT"})
+			}
+			return errors.New(message)
+		}
 		if receivedError {
 			// The plugin already communicated the failure via an error event; suppress the
 			// redundant non-zero exit-code error so callers don't see it twice.
@@ -163,6 +213,211 @@ func (s Service) Execute(
 	}
 
 	return nil
+}
+
+func (s Service) injectSettings(ctx context.Context, pluginKey string, request plugindomain.ExecutionRequest) (plugindomain.ExecutionRequest, error) {
+	settings, err := s.loadSettings(ctx, pluginKey)
+	if err != nil {
+		return request, err
+	}
+
+	if request.Context == nil {
+		request.Context = map[string]any{}
+	}
+	request.Context["settings"] = settings
+	return request, nil
+}
+
+func (s Service) loadSettings(ctx context.Context, pluginKey string) (map[string]any, error) {
+	if s.settingsStore == nil || strings.TrimSpace(pluginKey) == "" {
+		return map[string]any{}, nil
+	}
+
+	raw, err := s.settingsStore.GetConfig(ctx, settingsKey(pluginKey))
+	if err != nil {
+		return nil, fmt.Errorf("get plugin settings %s: %w", pluginKey, err)
+	}
+	if len(raw) == 0 || strings.TrimSpace(string(raw)) == "" || strings.TrimSpace(string(raw)) == "null" {
+		return map[string]any{}, nil
+	}
+
+	var settings map[string]any
+	if err := json.Unmarshal(raw, &settings); err != nil {
+		return nil, fmt.Errorf("decode plugin settings %s: %w", pluginKey, err)
+	}
+	if settings == nil {
+		return map[string]any{}, nil
+	}
+	return settings, nil
+}
+
+func (s Service) executionTimeoutForRequest(request plugindomain.ExecutionRequest) time.Duration {
+	if source := strings.TrimSpace(asString(request.Context["source"])); source == "account-execute" {
+		return s.executionTimeouts.Account
+	}
+
+	switch strings.ToLower(strings.TrimSpace(request.Mode)) {
+	case "agent":
+		return s.executionTimeouts.Agent
+	case "job":
+		return s.executionTimeouts.Job
+	case "account":
+		return s.executionTimeouts.Account
+	default:
+		return 0
+	}
+}
+
+func settingsKey(pluginKey string) string {
+	return "plugin_settings:" + pluginKey
+}
+
+func defaultExecutionTimeouts() ExecutionTimeouts {
+	return ExecutionTimeouts{
+		Account: 60 * time.Second,
+		Job:     10 * time.Minute,
+		Agent:   0,
+	}
+}
+
+func normalizeExecutionTimeouts(in ExecutionTimeouts) ExecutionTimeouts {
+	if in.Account < 0 {
+		in.Account = 0
+	}
+	if in.Job < 0 {
+		in.Job = 0
+	}
+	if in.Agent < 0 {
+		in.Agent = 0
+	}
+	return in
+}
+
+func decodeExecutionEventLine(line []byte) (plugindomain.ExecutionEvent, bool) {
+	raw := map[string]any{}
+	if err := json.Unmarshal(line, &raw); err != nil {
+		return plugindomain.ExecutionEvent{Type: "log", Message: string(line)}, false
+	}
+
+	if eventType := strings.TrimSpace(asString(raw["type"])); eventType != "" {
+		event := plugindomain.ExecutionEvent{
+			Type:     eventType,
+			Message:  strings.TrimSpace(asString(raw["message"])),
+			Progress: asInt(raw["progress"]),
+			Data:     asMap(raw["data"]),
+			Error:    strings.TrimSpace(asString(raw["error"])),
+		}
+		if event.Type == "error" && event.Message == "" {
+			event.Message = event.Error
+		}
+		return event, false
+	}
+
+	status := strings.ToLower(strings.TrimSpace(asString(raw["status"])))
+	if status == "" {
+		return plugindomain.ExecutionEvent{Type: "log", Message: string(line)}, false
+	}
+
+	switch status {
+	case "log":
+		message := strings.TrimSpace(asString(raw["message"]))
+		if message == "" {
+			message = strings.TrimSpace(asString(raw["detail_message"]))
+		}
+		if message == "" {
+			message = string(line)
+		}
+		return plugindomain.ExecutionEvent{Type: "log", Message: message}, true
+	case "success":
+		data := asMap(raw["result"])
+		if data == nil {
+			data = map[string]any{}
+			if value, exists := raw["result"]; exists && value != nil {
+				data["value"] = value
+			}
+		}
+		return plugindomain.ExecutionEvent{
+			Type:    "result",
+			Message: strings.TrimSpace(asString(raw["message"])),
+			Data:    data,
+		}, true
+	case "error":
+		errorCode := strings.TrimSpace(asString(raw["error_code"]))
+		message := strings.TrimSpace(asString(raw["error_message"]))
+		if message == "" {
+			message = strings.TrimSpace(asString(raw["message"]))
+		}
+		if message == "" {
+			message = errorCode
+		}
+		return plugindomain.ExecutionEvent{
+			Type:    "error",
+			Message: message,
+			Error:   errorCode,
+			Data:    asMap(raw["result"]),
+		}, true
+	case "event", "init_ok", "done":
+		data := asMap(raw["result"])
+		if data == nil {
+			data = map[string]any{}
+		}
+		data["status"] = status
+		return plugindomain.ExecutionEvent{
+			Type:    "progress",
+			Message: strings.TrimSpace(asString(raw["message"])),
+			Data:    data,
+		}, true
+	default:
+		return plugindomain.ExecutionEvent{Type: "log", Message: string(line)}, true
+	}
+}
+
+func asString(value any) string {
+	if s, ok := value.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func asMap(value any) map[string]any {
+	if value == nil {
+		return nil
+	}
+	if m, ok := value.(map[string]any); ok {
+		return m
+	}
+	return nil
+}
+
+func asInt(value any) int {
+	switch v := value.(type) {
+	case int:
+		return v
+	case int8:
+		return int(v)
+	case int16:
+		return int(v)
+	case int32:
+		return int(v)
+	case int64:
+		return int(v)
+	case uint:
+		return int(v)
+	case uint8:
+		return int(v)
+	case uint16:
+		return int(v)
+	case uint32:
+		return int(v)
+	case uint64:
+		return int(v)
+	case float32:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		return 0
+	}
 }
 
 func (s Service) pythonBinary() string {

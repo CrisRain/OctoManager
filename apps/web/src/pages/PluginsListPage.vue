@@ -182,9 +182,11 @@ function closeSyncResult() {
       >
         <template #columns>
           <!-- 插件 Key -->
-          <ui-table-column title="插件 Key" data-index="manifest.key">
+          <ui-table-column title="插件标识" data-index="manifest.key">
             <template #cell="{ record }">
-              <code class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-mono font-semibold text-slate-700 border-slate-200 bg-white/[64%]">@{{ record.manifest.key }}</code>
+              <div class="flex flex-col gap-0.5">
+                <code class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-mono font-semibold text-slate-700 border-slate-200 bg-white/65">@{{ record.manifest.key }}</code>
+              </div>
             </template>
           </ui-table-column>
 
@@ -213,7 +215,7 @@ function closeSyncResult() {
           <ui-table-column title="状态">
             <template #cell="{ record }">
               <span
-                class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold"
+                class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
                 :class="record.healthy ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'"
               >
                 <span
@@ -262,7 +264,7 @@ function closeSyncResult() {
           <div class="flex min-w-0 flex-1 flex-col gap-0.5">
             <div class="truncate text-sm font-semibold text-slate-900">{{ record.manifest.name }}</div>
             <div class="text-xs text-slate-500">
-              <code class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-mono font-semibold text-slate-700 border-slate-200 bg-white/[64%]">@{{ record.manifest.key }}</code>
+              <code class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-mono font-semibold text-slate-700 border-slate-200 bg-white/65">@{{ record.manifest.key }}</code>
             </div>
           </div>
           <ui-button size="small" type="text" @click="viewDetail(record)">
@@ -290,7 +292,7 @@ function closeSyncResult() {
             <span class="w-12 flex-shrink-0 text-xs font-medium text-slate-500">状态</span>
             <div class="flex flex-wrap items-center gap-1">
               <span
-                class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold"
+                class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold"
                 :class="record.healthy ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-700'"
               >
                 <span
@@ -306,7 +308,7 @@ function closeSyncResult() {
 
       <ui-card
         v-if="!loading && !filteredPlugins.length"
-        class="rounded-xl border border-slate-200 bg-white shadow-sm px-5 py-8"
+        class="col-span-full empty-state-block"
       >
         <ui-empty description="暂无插件">
           <p class="text-sm leading-6 text-slate-500">请将插件放入 plugins/modules 目录后重启服务，或点击「同步插件」</p>

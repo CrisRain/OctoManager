@@ -8,24 +8,27 @@ import (
 	"github.com/cloudwego/hertz/pkg/route"
 
 	systemapp "octomanger/internal/domains/system/app"
+	"octomanger/internal/platform/auth"
 	"octomanger/internal/platform/httpx"
 )
 
 type Handler struct {
-	service systemapp.Service
+	adminKey string
+	service  systemapp.Service
 }
 
-func NewHandler(service systemapp.Service) Handler {
-	return Handler{service: service}
+func NewHandler(adminKey string, service systemapp.Service) Handler {
+	return Handler{adminKey: adminKey, service: service}
 }
 
 // Register registers healthz on root and system routes on v2 group.
 func (h Handler) Register(root *route.RouterGroup, v2 *route.RouterGroup) {
+	guard := auth.RequireAdmin(h.adminKey)
 	root.GET("/healthz", h.healthz)
 	v2.GET("/system/status", h.status)
-	v2.GET("/dashboard", h.dashboard)
-	v2.GET("/config/:key", h.getConfig)
-	v2.PUT("/config/:key", h.putConfig)
+	v2.GET("/dashboard", guard, h.dashboard)
+	v2.GET("/config/:key", guard, h.getConfig)
+	v2.PUT("/config/:key", guard, h.putConfig)
 }
 
 func (h Handler) healthz(ctx context.Context, c *app.RequestContext) {

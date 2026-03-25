@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package plugin.v1;
+
+option go_package = "octomanger/internal/gen/plugin/v1;pluginv1";
+
+// PluginService is the gRPC interface every plugin microservice must implement.
+// The Go worker acts as a client; each Python plugin process acts as a server.
+service PluginService {
+  // Execute runs a plugin action and streams execution events back to the caller.
+  // The stream ends when the plugin emits a final "result" or "error" event.
+  // This mirrors the existing stdin/stdout newline-delimited JSON protocol.
+  rpc Execute(ExecuteRequest) returns (stream ExecuteEvent);
+
+  // GetManifest returns the plugin's account-type manifest (replaces reading
+  // account_type.{key}.json from the filesystem).
+  rpc GetManifest(GetManifestRequest) returns (GetManifestResponse);
+
+  // HealthCheck is a lightweight liveness probe used by the worker supervisor.
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+}
+
+// ExecuteRequest carries everything a plugin needs to handle one action call.
+message ExecuteRequest {
+  // Execution mode: "account", "job", or "agent"
+  string mode = 1;
+  // Action name, e.g. "VERIFY", "AGENT_MONITOR"
+  string action = 2;
+  // JSON-encoded map[string]any — account spec, params, etc.
+  bytes input = 3;
+  // JSON-encoded map[string]any — settings, api_url, api_token, agent_id, etc.
+  bytes context = 4;
+}
+
+// ExecuteEvent is a single event streamed from the plugin back to the caller.
+// Field layout mirrors the existing JSON event protocol used over stdout.
+message ExecuteEvent {
+  // Event kind: "log", "progress", "result", "error"
+  string type = 1;
+  // Human-readable message
+  string message = 2;
+  // Optional integer progress indicator (0–100)
+  int32 progress = 3;
+  // JSON-encoded map[string]any — event-specific payload
+  bytes data = 4;
+  // Error code string, non-empty only when type == "error"
+  string error = 5;
+}
+
+message GetManifestRequest {}
+
+// GetManifestResponse returns the full account_type JSON manifest as raw bytes.
+message GetManifestResponse {
+  // JSON-encoded AccountTypeSpec (same schema as account_type.{key}.json)
+  bytes manifest = 1;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool   healthy = 1;
+  string version = 2;
+}

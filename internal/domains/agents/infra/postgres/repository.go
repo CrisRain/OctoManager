@@ -6,24 +6,35 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 
 	agentdomain "octomanger/internal/domains/agents/domain"
+	"octomanger/internal/platform/dbutil"
 )
 
 var ErrNotFound = errors.New("agent not found")
 
 type Repository struct {
-	db *gorm.DB
+	db  *gorm.DB
+	rdb *redis.Client
 }
 
-func New(db *gorm.DB) Repository {
-	return Repository{db: db}
+func New(db *gorm.DB, rdb ...*redis.Client) Repository {
+	var client *redis.Client
+	if len(rdb) > 0 {
+		client = rdb[0]
+	}
+	return Repository{db: db, rdb: client}
 }
 
 func (r Repository) List(ctx context.Context) ([]agentdomain.Agent, error) {
+	if items, ok := r.readAgentsCache(ctx); ok {
+		return items, nil
+	}
 	rows, err := r.db.WithContext(ctx).Raw(`
 		SELECT id, name, plugin_key, action, input_json, desired_state, runtime_state,
 		       COALESCE(last_error, ''), last_heartbeat_at, created_at, updated_at
@@ -32,7 +43,12 @@ func (r Repository) List(ctx context.Context) ([]agentdomain.Agent, error) {
 		return nil, fmt.Errorf("list agents: %w", err)
 	}
 	defer rows.Close()
-	return scanAgents(rows)
+	items, err := scanAgents(rows)
+	if err != nil {
+		return nil, err
+	}
+	r.writeAgentsCache(ctx, items)
+	return items, nil
 }
 
 func (r Repository) ListDesiredRunning(ctx context.Context) ([]agentdomain.Agent, error) {
@@ -48,23 +64,24 @@ func (r Repository) ListDesiredRunning(ctx context.Context) ([]agentdomain.Agent
 }
 
 func (r Repository) Create(ctx context.Context, input agentdomain.CreateAgentInput) (*agentdomain.Agent, error) {
-	inputJSON, err := json.Marshal(normalizeMap(input.Input))
+	inputJSON, err := json.Marshal(dbutil.NormalizeMap(input.Input))
 	if err != nil {
 		return nil, fmt.Errorf("marshal agent input: %w", err)
 	}
 
-	var agentID int64
 	row := r.db.WithContext(ctx).Raw(`
 		INSERT INTO agents (name, plugin_key, action, input_json, desired_state, runtime_state)
 		VALUES ($1, $2, $3, $4, 'stopped', 'idle')
-		RETURNING id`,
+		RETURNING id, name, plugin_key, action, input_json, desired_state, runtime_state,
+		          COALESCE(last_error, ''), last_heartbeat_at, created_at, updated_at`,
 		input.Name, input.PluginKey, input.Action, inputJSON,
 	).Row()
-	if err := row.Scan(&agentID); err != nil {
+	item, err := scanAgent(row)
+	if err != nil {
 		return nil, fmt.Errorf("create agent: %w", err)
 	}
-
-	return r.Get(ctx, agentID)
+	r.invalidateAgentsCache(ctx)
+	return &item, nil
 }
 
 func (r Repository) Get(ctx context.Context, agentID int64) (*agentdomain.Agent, error) {
@@ -76,6 +93,38 @@ func (r Repository) Get(ctx context.Context, agentID int64) (*agentdomain.Agent,
 	if err != nil {
 		return nil, err
 	}
+	return &item, nil
+}
+
+func (r Repository) Patch(ctx context.Context, agentID int64, input agentdomain.PatchAgentInput) (*agentdomain.Agent, error) {
+	current, err := r.Get(ctx, agentID)
+	if err != nil {
+		return nil, err
+	}
+
+	if input.Name != nil {
+		current.Name = *input.Name
+	}
+	if input.Input != nil {
+		current.Input = input.Input
+	}
+
+	inputJSON, err := json.Marshal(dbutil.NormalizeMap(current.Input))
+	if err != nil {
+		return nil, fmt.Errorf("marshal agent input: %w", err)
+	}
+
+	row := r.db.WithContext(ctx).Raw(`
+		UPDATE agents SET name = $2, input_json = $3, updated_at = NOW() WHERE id = $1
+		RETURNING id, name, plugin_key, action, input_json, desired_state, runtime_state,
+		          COALESCE(last_error, ''), last_heartbeat_at, created_at, updated_at`,
+		agentID, current.Name, inputJSON,
+	).Row()
+	item, err := scanAgent(row)
+	if err != nil {
+		return nil, fmt.Errorf("patch agent: %w", err)
+	}
+	r.invalidateAgentsCache(ctx)
 	return &item, nil
 }
 
@@ -106,11 +155,24 @@ func (r Repository) UpdateRuntimeState(ctx context.Context, agentID int64, runti
 	if result.RowsAffected == 0 {
 		return ErrNotFound
 	}
+	r.invalidateAgentsCache(ctx)
+	return nil
+}
+
+func (r Repository) Delete(ctx context.Context, agentID int64) error {
+	result := r.db.WithContext(ctx).Exec(`DELETE FROM agents WHERE id = $1`, agentID)
+	if result.Error != nil {
+		return fmt.Errorf("delete agent: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return ErrNotFound
+	}
+	r.invalidateAgentsCache(ctx)
 	return nil
 }
 
 func (r Repository) AppendLog(ctx context.Context, agentID int64, eventType, message string, payload map[string]any) error {
-	payloadJSON, err := json.Marshal(normalizeMap(payload))
+	payloadJSON, err := json.Marshal(dbutil.NormalizeMap(payload))
 	if err != nil {
 		return fmt.Errorf("marshal agent log payload: %w", err)
 	}
@@ -122,10 +184,58 @@ func (r Repository) AppendLog(ctx context.Context, agentID int64, eventType, mes
 	if result.Error != nil {
 		return fmt.Errorf("append agent log: %w", result.Error)
 	}
+	if err := r.trimAgentLogs(ctx, agentID); err != nil {
+		return err
+	}
+	r.refreshAgentLogsCache(ctx, agentID)
+	return nil
+}
+
+func (r Repository) AppendLogBatch(ctx context.Context, entries []agentdomain.AgentLogEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	const cols = 4
+	args := make([]any, 0, len(entries)*cols)
+	placeholders := make([]string, len(entries))
+	for i, e := range entries {
+		base := i * cols
+		placeholders[i] = fmt.Sprintf("($%d,$%d,$%d,$%d)", base+1, base+2, base+3, base+4)
+		p, _ := json.Marshal(dbutil.NormalizeMap(e.Payload))
+		args = append(args, e.AgentID, e.EventType, e.Message, p)
+	}
+	query := "INSERT INTO agent_logs (agent_id, event_type, message, payload_json) VALUES " +
+		strings.Join(placeholders, ",")
+	if result := r.db.WithContext(ctx).Exec(query, args...); result.Error != nil {
+		return fmt.Errorf("append agent log batch: %w", result.Error)
+	}
+	seen := make(map[int64]struct{}, len(entries))
+	for _, entry := range entries {
+		if _, ok := seen[entry.AgentID]; ok {
+			continue
+		}
+		seen[entry.AgentID] = struct{}{}
+		if err := r.trimAgentLogs(ctx, entry.AgentID); err != nil {
+			return err
+		}
+		r.refreshAgentLogsCache(ctx, entry.AgentID)
+	}
 	return nil
 }
 
 func (r Repository) ListLogsAfter(ctx context.Context, agentID, afterID int64) ([]agentdomain.AgentLog, error) {
+	if items, ok := r.readAgentLogsCache(ctx, agentID); ok {
+		filtered := make([]agentdomain.AgentLog, 0, len(items))
+		for _, item := range items {
+			if item.ID > afterID {
+				filtered = append(filtered, item)
+			}
+		}
+		if len(filtered) > agentLogLimit {
+			return filtered[:agentLogLimit], nil
+		}
+		return filtered, nil
+	}
 	rows, err := r.db.WithContext(ctx).Raw(`
 		SELECT id, agent_id, event_type, message, payload_json, created_at
 		FROM agent_logs
@@ -144,10 +254,14 @@ func (r Repository) ListLogsAfter(ctx context.Context, agentID, afterID int64) (
 		if err := rows.Scan(&item.ID, &item.AgentID, &item.EventType, &item.Message, &payloadJSON, &item.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan agent log: %w", err)
 		}
-		item.Payload = decodeJSONMap(payloadJSON)
+		item.Payload = dbutil.DecodeJSONMap(payloadJSON)
 		items = append(items, item)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	r.refreshAgentLogsCache(ctx, agentID)
+	return items, nil
 }
 
 type scanner interface {
@@ -180,26 +294,10 @@ func scanAgent(row scanner) (agentdomain.Agent, error) {
 		}
 		return agentdomain.Agent{}, fmt.Errorf("scan agent: %w", err)
 	}
-	item.Input = decodeJSONMap(inputJSON)
+	item.Input = dbutil.DecodeJSONMap(inputJSON)
 	if lastHeartbeat.Valid {
 		t := lastHeartbeat.Time
 		item.LastHeartbeatAt = &t
 	}
 	return item, nil
-}
-
-func decodeJSONMap(raw []byte) map[string]any {
-	if len(raw) == 0 {
-		return map[string]any{}
-	}
-	v := map[string]any{}
-	_ = json.Unmarshal(raw, &v)
-	return v
-}
-
-func normalizeMap(value map[string]any) map[string]any {
-	if value == nil {
-		return map[string]any{}
-	}
-	return value
 }

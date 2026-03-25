@@ -2,8 +2,13 @@
 import { computed } from "vue";
 import {
   IconFile, IconUser, IconEmail, IconCheckCircle,
-  IconCloseCircle, IconRefresh, IconPlus
+  IconCloseCircle, IconRefresh, IconPlus, IconArrowRight
 } from "@/lib/icons";
+
+interface WorkflowStep {
+  label: string;
+  description?: string;
+}
 
 interface Props {
   type?: "empty" | "error" | "success" | "loading";
@@ -12,6 +17,8 @@ interface Props {
   icon?: any;
   actionText?: string;
   hideAction?: boolean;
+  /** 操作流程步骤，显示在描述下方，帮助用户了解下一步 */
+  workflowSteps?: WorkflowStep[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -74,13 +81,20 @@ function handleAction() {
     }">
       <component :is="displayIcon" class="h-6 w-6" :class="{ 'animate-spin': isLoading }" />
     </div>
-    <div class="flex flex-col gap-1.5">
+    <div class="flex flex-col gap-2">
       <h3 class="m-0 text-lg font-semibold tracking-tight text-slate-900">{{ displayTitle }}</h3>
       <slot name="description">
         <p v-if="displayDescription" class="text-sm text-slate-500 max-w-[280px] mx-auto">
           {{ displayDescription }}
         </p>
       </slot>
+    </div>
+    <!-- 操作流程提示 -->
+    <div v-if="workflowSteps?.length" class="mt-1 flex flex-wrap items-center justify-center gap-1 text-xs text-slate-400">
+      <template v-for="(step, i) in workflowSteps" :key="i">
+        <span class="rounded-md border border-slate-200 bg-white px-2 py-1 font-medium text-slate-600">{{ step.label }}</span>
+        <icon-arrow-right v-if="i < workflowSteps.length - 1" class="h-3 w-3 flex-shrink-0" />
+      </template>
     </div>
     <div v-if="!hideAction" class="mt-4">
       <slot name="action">

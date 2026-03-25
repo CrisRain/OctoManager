@@ -1,5 +1,6 @@
 import { computed, ref } from "vue";
 import { useMessage } from "./useMessage";
+import { Notification } from "@/lib/feedback";
 
 /**
  * 常见错误类型的用户友好映射
@@ -28,6 +29,24 @@ const ERROR_MESSAGES: Record<string, string> = {
   "unauthorized": "权限不足",
   "duplicate": "数据已存在",
   "foreign_key": "有关联数据无法删除",
+};
+
+/**
+ * 错误恢复建议：针对常见错误给出操作提示
+ */
+const ERROR_HINTS: Record<string, string> = {
+  "Network Error": "请检查网络连接后刷新页面",
+  "ERR_NETWORK": "请检查网络连接后刷新页面",
+  "timeout": "可尝试刷新页面或稍后重试",
+  "401": "请在系统设置中确认 API 密钥是否正确",
+  "403": "如需帮助，请联系管理员",
+  "404": "该资源可能已被删除，请返回列表页",
+  "409": "请刷新页面后再试",
+  "500": "如问题持续出现，请检查服务端日志",
+  "502": "服务可能正在重启，请稍后刷新",
+  "503": "请稍后刷新页面",
+  "foreign_key": "请先删除引用该资源的其他数据",
+  "duplicate": "请使用不同的名称或标识符",
 };
 
 /**
@@ -60,6 +79,28 @@ function getFriendlyMessage(error: Error | string): string {
 }
 
 /**
+ * 获取错误恢复建议
+ */
+function getErrorHint(error: Error | string): string | undefined {
+  const message = typeof error === "string" ? error : error.message;
+  const lowerMessage = message.toLowerCase();
+
+  if (lowerMessage.includes("network") || lowerMessage.includes("fetch")) {
+    return ERROR_HINTS["Network Error"];
+  }
+  if (lowerMessage.includes("timeout")) {
+    return ERROR_HINTS["timeout"];
+  }
+
+  for (const [code, hint] of Object.entries(ERROR_HINTS)) {
+    if (message.includes(code)) {
+      return hint;
+    }
+  }
+  return undefined;
+}
+
+/**
  * 统一的错误处理composable
  */
 export const useErrorHandler = () => {
@@ -70,8 +111,16 @@ export const useErrorHandler = () => {
    */
   const handleError = (error: Error | string, action?: string) => {
     const friendlyMsg = getFriendlyMessage(error);
+    const hint = getErrorHint(error);
 
-    if (action) {
+    if (hint) {
+      // 有恢复建议时，使用通知（带标题+提示）
+      Notification.error({
+        title: action ? `${action}失败` : "操作失败",
+        content: `${friendlyMsg}。${hint}`,
+        duration: 6000,
+      });
+    } else if (action) {
       message.error(`${action}失败：${friendlyMsg}`);
     } else {
       message.error(friendlyMsg);
@@ -111,6 +160,7 @@ export const useErrorHandler = () => {
     handleError,
     withErrorHandler,
     getFriendlyMessage,
+    getErrorHint,
   };
 };
 

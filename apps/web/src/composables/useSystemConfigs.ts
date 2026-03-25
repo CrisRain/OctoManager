@@ -6,6 +6,7 @@ const KNOWN_CONFIGS = [
   { key: "app.name", label: "应用名称", description: "平台显示名称" },
   { key: "job.default_timeout_minutes", label: "任务超时（分钟）", description: "默认任务执行超时" },
   { key: "job.max_concurrency", label: "最大并发数", description: "Worker 最大并发任务数" },
+  { key: "plugins.grpc_services", label: "插件 gRPC 服务", description: "插件键到 gRPC 地址的 JSON 映射，启动时会自动初始化默认值" },
 ] as const;
 
 export type KnownConfigItem = (typeof KNOWN_CONFIGS)[number];

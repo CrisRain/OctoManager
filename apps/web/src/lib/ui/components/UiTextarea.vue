@@ -48,7 +48,7 @@ const wrapperClass = computed(() =>
 <template>
   <div v-bind="{ ...attrs, class: undefined }" :class="wrapperClass">
     <textarea
-      class="ui-textarea w-full resize-y border-0 bg-transparent text-sm leading-6 tracking-[-0.01em] text-slate-900 outline-none placeholder:text-slate-400"
+      class="ui-textarea w-full resize-y border-0 bg-transparent text-sm leading-6 tracking-[-0.01em] text-slate-900 outline-none placeholder:text-slate-500"
       :value="modelValue ?? ''"
       :placeholder="placeholder"
       :rows="minRows"

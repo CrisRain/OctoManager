@@ -10,24 +10,16 @@ import (
 
 	accounttypeapp "octomanger/internal/domains/account-types/app"
 	accounttypedomain "octomanger/internal/domains/account-types/domain"
-	accounttypepostgres "octomanger/internal/domains/account-types/infra/postgres"
 	accountapp "octomanger/internal/domains/accounts/app"
-	accountpostgres "octomanger/internal/domains/accounts/infra/postgres"
 	agentapp "octomanger/internal/domains/agents/app"
-	agentpostgres "octomanger/internal/domains/agents/infra/postgres"
 	emailapp "octomanger/internal/domains/email/app"
-	emailpostgres "octomanger/internal/domains/email/infra/postgres"
 	jobapp "octomanger/internal/domains/jobs/app"
-	jobpostgres "octomanger/internal/domains/jobs/infra/postgres"
+	plugins "octomanger/internal/domains/plugins"
 	pluginapp "octomanger/internal/domains/plugins/app"
-	"octomanger/internal/domains/plugins/infra/fsrepo"
+	"octomanger/internal/domains/plugins/grpcclient"
 	systemapp "octomanger/internal/domains/system/app"
 	triggerapp "octomanger/internal/domains/triggers/app"
-	triggerpostgres "octomanger/internal/domains/triggers/infra/postgres"
 	"octomanger/internal/platform/config"
-	"octomanger/internal/platform/database"
-	"octomanger/internal/platform/logging"
-	redisclient "octomanger/internal/platform/redis"
 )
 
 type App struct {
@@ -39,7 +31,7 @@ type App struct {
 	Accounts     accountapp.Service
 	Email        emailapp.Service
 	Triggers     triggerapp.Service
-	Plugins      pluginapp.Service
+	Plugins      plugins.PluginService
 	Jobs         jobapp.Service
 	Agents       *agentapp.Service
 	System       systemapp.Service
@@ -47,68 +39,59 @@ type App struct {
 
 // Close releases DB and Redis connections.
 func (a *App) Close() {
+	if grpcPlugins, ok := a.Plugins.(*grpcclient.Client); ok && grpcPlugins != nil {
+		grpcPlugins.Close()
+	}
 	if sqlDB, err := a.DB.DB(); err == nil {
-		sqlDB.Close()
+		if err := sqlDB.Close(); err != nil {
+			a.Logger.Error("close db connection", zap.Error(err))
+		}
 	}
 	if a.Redis != nil {
-		a.Redis.Close()
+		if err := a.Redis.Close(); err != nil {
+			a.Logger.Error("close redis connection", zap.Error(err))
+		}
 	}
 	_ = a.Logger.Sync()
 }
 
 func Bootstrap(ctx context.Context) (*App, error) {
-	cfg, err := config.Load()
+	resources, err := bootstrapPlatform(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	logger := logging.New(cfg.Logging)
-
-	db, err := database.Open(cfg.Database)
+	pluginSvc, err := bootstrapPluginService(ctx, resources)
 	if err != nil {
 		return nil, err
 	}
 
-	rdb, err := redisclient.New(cfg.Redis)
-	if err != nil {
-		logger.Warn("redis unavailable, continuing without cache", zap.Error(err))
-		rdb = nil
+	services := bootstrapDomainServices(resources, pluginSvc)
+
+	app := &App{
+		Config:       *resources.cfg,
+		Logger:       resources.logger,
+		DB:           resources.db,
+		Redis:        resources.rdb,
+		AccountTypes: services.accountTypes,
+		Accounts:     services.accounts,
+		Email:        services.email,
+		Triggers:     services.triggers,
+		Plugins:      services.plugins,
+		Jobs:         services.jobs,
+		Agents:       services.agents,
+		System:       services.system,
 	}
 
-	pluginRepo := fsrepo.New(cfg.Plugins.ModulesDir)
-	plugins := pluginapp.New(pluginRepo, cfg.Plugins.PythonBin, cfg.Plugins.SDKDir)
+	enforceLogRetentionOnStartup(ctx, app)
+	syncPluginAccountTypesOnStartup(ctx, app)
 
-	accountTypeRepo := accounttypepostgres.New(db)
-	accountTypes := accounttypeapp.New(accountTypeRepo)
+	return app, nil
+}
 
-	accountRepo := accountpostgres.New(db)
-	accounts := accountapp.New(accountRepo)
-
-	emailRepo := emailpostgres.New(db)
-	email := emailapp.New(emailRepo)
-
-	jobRepo := jobpostgres.New(db)
-	jobs := jobapp.New(logger, jobRepo, plugins, cfg.Worker.ID)
-
-	triggerRepo := triggerpostgres.New(db)
-	triggers := triggerapp.New(triggerRepo, jobs)
-
-	agentRepo := agentpostgres.New(db)
-	agents := agentapp.New(
-		logger,
-		agentRepo,
-		plugins,
-		rdb,
-		cfg.Worker.ID,
-		cfg.Worker.AgentLoopInterval,
-		cfg.Worker.AgentErrorBackoff,
-	)
-
-	system := systemapp.New(db, plugins)
-
-	// Sync account types from plugin account_type.{key}.json files on every startup.
-	if syncErr := plugins.SyncAccountTypes(ctx, func(ctx context.Context, spec pluginapp.AccountTypeSpec) error {
-		_, err := accountTypes.Upsert(ctx, accounttypedomain.CreateInput{
+func (a *App) SyncPluginAccountTypes(ctx context.Context) error {
+	return a.Plugins.SyncAccountTypes(ctx, func(ctx context.Context, spec pluginapp.AccountTypeSpec) error {
+		_, err := a.AccountTypes.Upsert(ctx, accounttypedomain.CreateInput{
 			Key:          spec.Key,
 			Name:         spec.Name,
 			Category:     spec.Category,
@@ -116,24 +99,15 @@ func Bootstrap(ctx context.Context) (*App, error) {
 			Capabilities: spec.Capabilities,
 		})
 		return err
-	}); syncErr != nil {
-		logger.Warn("plugin account type sync failed", zap.Error(syncErr))
-	} else {
-		logger.Info("plugin account types synced")
-	}
+	})
+}
 
-	return &App{
-		Config:       cfg,
-		Logger:       logger,
-		DB:           db,
-		Redis:        rdb,
-		AccountTypes: accountTypes,
-		Accounts:     accounts,
-		Email:        email,
-		Triggers:     triggers,
-		Plugins:      plugins,
-		Jobs:         jobs,
-		Agents:       agents,
-		System:       system,
-	}, nil
+// toGRPCServiceMap converts the config's PluginServiceEntry map to the type
+// expected by grpcclient.NewStaticRegistry.
+func toGRPCServiceMap(src map[string]config.PluginServiceEntry) map[string]grpcclient.PluginServiceConfig {
+	dst := make(map[string]grpcclient.PluginServiceConfig, len(src))
+	for k, v := range src {
+		dst[k] = grpcclient.PluginServiceConfig{Address: v.Address}
+	}
+	return dst
 }

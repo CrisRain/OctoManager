@@ -24,29 +24,36 @@ const resolvedIconBg = computed(
     "linear-gradient(135deg, rgba(10, 132, 255, 0.18) 0%, rgba(94, 92, 230, 0.16) 100%)"
 );
 const resolvedIconColor = computed(() => props.iconColor ?? "var(--accent)");
+const backAriaLabel = computed(() =>
+  props.backLabel ? `返回：${props.backLabel}` : "返回上一页"
+);
 </script>
 
 <template>
   <div class="mb-8 flex items-start justify-between gap-4 max-md:flex-col max-md:items-start motion-safe:animate-[slide-up_0.3s_ease-out]">
-    <div class="flex min-w-0 flex-1 items-center gap-3">
+    <div class="flex min-w-0 flex-1 items-start gap-4">
+      <!-- Back button: h-9 visual but 44px tap zone via before: -->
       <button type="button"
         v-if="backTo"
-        class="relative inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/20"
+        :aria-label="backAriaLabel"
+        class="relative mt-1 inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-all hover:bg-slate-50 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50 focus-visible:ring-offset-1 before:absolute before:-inset-[4px] before:content-['']"
         @click="router.push(backTo)"
       >
-        <icon-left />
+        <icon-left aria-hidden="true" />
         <span v-if="backLabel" class="page-header__tooltip pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 translate-y-1.5 whitespace-nowrap rounded-full border border-slate-200 bg-gray-900/90 px-2.5 py-1 text-xs text-white/90 opacity-0 transition-[opacity,transform] duration-[160ms]">{{ backLabel }}</span>
       </button>
 
-      <div class="flex min-w-0 flex-col gap-1">
-        <h1 class="flex items-center gap-2 text-2xl font-semibold tracking-tight text-slate-900 max-md:text-xl">
-          <span
-            v-if="$slots.icon"
-            class="inline-flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-slate-200 shadow-sm max-md:h-9 max-md:w-9"
-            :style="{ background: resolvedIconBg, color: resolvedIconColor }"
-          >
-            <slot name="icon" />
-          </span>
+      <div
+        v-if="$slots.icon"
+        class="mt-0.5 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl border border-slate-200 shadow-sm max-md:h-10 max-md:w-10 [&>svg]:h-6 [&>svg]:w-6 max-md:[&>svg]:h-5 max-md:[&>svg]:w-5"
+        :style="{ background: resolvedIconBg, color: resolvedIconColor }"
+        aria-hidden="true"
+      >
+        <slot name="icon" />
+      </div>
+
+      <div class="flex min-w-0 flex-col gap-1.5">
+        <h1 class="text-2xl font-bold tracking-tight text-slate-900 max-md:text-xl">
           {{ title }}
         </h1>
         <p v-if="hasSubtitle" class="max-w-[72ch] text-[14px] leading-relaxed text-slate-600">

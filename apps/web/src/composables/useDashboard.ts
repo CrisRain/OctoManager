@@ -1,7 +1,7 @@
+import { onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useSystemStore } from "@/store";
 import type { DashboardSummary } from "@/types";
-import { useAutoRefresh } from "./useAutoRefresh";
 
 export type { DashboardSummary };
 
@@ -13,11 +13,9 @@ export function useSystemStatus() {
     await store.fetchSystemStatus();
   }
 
-  const autoRefresh = useAutoRefresh(refresh, {
-    intervalMs: 15000,
-  });
+  onMounted(() => { void refresh(); });
 
-  return { data: systemStatus, loading: loadingStatus, error, refresh: autoRefresh.refresh };
+  return { data: systemStatus, loading: loadingStatus, error, refresh };
 }
 
 export function useDashboardSnapshot() {
@@ -26,14 +24,9 @@ export function useDashboardSnapshot() {
 
   async function refresh() {
     await store.fetchDashboardSummary();
-    if (dashboardSummary.value) {
-      console.log("[useDashboardSnapshot] response:", dashboardSummary.value);
-    }
   }
 
-  const autoRefresh = useAutoRefresh(refresh, {
-    intervalMs: 15000,
-  });
+  onMounted(() => { void refresh(); });
 
-  return { data: dashboardSummary, loading: loadingDashboard, error, refresh: autoRefresh.refresh };
+  return { data: dashboardSummary, loading: loadingDashboard, error, refresh };
 }

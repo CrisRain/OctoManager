@@ -1,21 +1,146 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { ref, reactive, computed, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { IconEdit, IconInfoCircle } from "@/lib/icons";
+import { IconEdit, IconClockCircle } from "@/lib/icons";
 
-import { useJobDefinitions } from "@/composables/useJobs";
-import { PageHeader } from "@/components/index";
+import { FormActionBar, FormPageLayout, PageHeader, SmartForm } from "@/components/index";
+import { useJobDefinitions, usePatchJobDefinition } from "@/composables/useJobs";
+import { useMessage, useErrorHandler } from "@/composables";
+import type { FieldConfig } from "@/components/smart-form.types";
 import { to } from "@/router/registry";
 
 const route = useRoute();
 const router = useRouter();
 const jobId = Number(route.params.id);
 
+const message = useMessage();
+const { withErrorHandler } = useErrorHandler();
 const { data: definitions, loading } = useJobDefinitions();
+const patch = usePatchJobDefinition();
+
 const job = computed(() => definitions.value.find((j) => j.id === jobId));
 
-function handleCancel() {
-  router.push(to.jobs.detail(jobId));
+const formRef = ref<InstanceType<typeof SmartForm>>();
+
+const formData = ref({
+  name: "",
+  input: "{}",
+  enabled: true,
+  cron_expression: "",
+  timezone: "UTC",
+  schedule_enabled: false,
+});
+
+watch(job, (j) => {
+  if (!j) return;
+  formData.value.name = j.name;
+  formData.value.input = JSON.stringify(j.input ?? {}, null, 2);
+  formData.value.enabled = j.enabled;
+  formData.value.cron_expression = j.schedule?.cron_expression ?? "";
+  formData.value.timezone = j.schedule?.timezone ?? "UTC";
+  formData.value.schedule_enabled = !!j.schedule?.cron_expression;
+}, { immediate: true });
+
+const formFields: FieldConfig[] = [
+  {
+    name: "name",
+    label: "任务名称",
+    type: "text",
+    placeholder: "例如: GitHub 账号验证",
+    required: true,
+    description: "任务的显示名称，用于界面展示",
+  },
+  {
+    name: "enabled",
+    label: "启用任务",
+    type: "switch",
+    description: "关闭后任务将不会被自动调度执行",
+  },
+  {
+    name: "input",
+    label: "输入参数",
+    type: "textarea",
+    placeholder: '{"key":"value"}',
+    description: "JSON 格式的输入参数，将传递给插件动作",
+    rows: 5,
+  },
+  {
+    name: "schedule_enabled",
+    label: "启用定时调度",
+    type: "switch",
+    description: "开启后需要设置 Cron 表达式，任务将按计划自动执行",
+  },
+  {
+    name: "cron_expression",
+    label: "Cron 表达式",
+    type: "text",
+    placeholder: "0 * * * *",
+    description: "格式：分 时 日 月 周。例如: 0 * * * * 表示每小时执行一次",
+  },
+  {
+    name: "timezone",
+    label: "时区",
+    type: "select",
+    defaultValue: "UTC",
+    options: [
+      { label: "UTC (协调世界时)", value: "UTC" },
+      { label: "Asia/Shanghai (上海)", value: "Asia/Shanghai" },
+      { label: "Asia/Tokyo (东京)", value: "Asia/Tokyo" },
+      { label: "America/New_York (纽约)", value: "America/New_York" },
+      { label: "Europe/London (伦敦)", value: "Europe/London" },
+    ],
+  },
+];
+
+const cronPresets = [
+  { label: "每分钟", value: "* * * * *" },
+  { label: "每小时", value: "0 * * * *" },
+  { label: "每天 0 点", value: "0 0 * * *" },
+  { label: "每周一 0 点", value: "0 0 * * 1" },
+  { label: "每月 1 号 0 点", value: "0 0 1 * *" },
+  { label: "工作日 9 点", value: "0 9 * * 1-5" },
+];
+
+function applyCronPreset(preset: string) {
+  formData.value.cron_expression = preset;
+}
+
+async function handleSave() {
+  const isValid = formRef.value?.validate();
+  if (!isValid) {
+    message.error("请检查表单填写是否正确");
+    return;
+  }
+
+  let input: Record<string, unknown> = {};
+  try {
+    if (formData.value.input.trim()) {
+      input = JSON.parse(formData.value.input) as Record<string, unknown>;
+    }
+  } catch {
+    message.error("输入参数格式错误，请检查 JSON 格式");
+    return;
+  }
+
+  await withErrorHandler(
+    async () => {
+      await patch.execute(jobId, {
+        name: formData.value.name.trim(),
+        input,
+        enabled: formData.value.enabled,
+        schedule: formData.value.schedule_enabled && formData.value.cron_expression.trim()
+          ? {
+              cron_expression: formData.value.cron_expression.trim(),
+              timezone: formData.value.timezone,
+              enabled: true,
+            }
+          : undefined,
+      });
+      message.success("任务已更新");
+      router.push(to.jobs.detail(jobId));
+    },
+    { action: "更新任务", showSuccess: false }
+  );
 }
 </script>
 
@@ -23,96 +148,87 @@ function handleCancel() {
   <div class="page-shell">
     <PageHeader
       title="编辑任务"
-      :subtitle="job ? `正在编辑 ${job.name}` : '任务详情加载中...'"
+      :subtitle="job ? `正在编辑 ${job.name}` : '任务详情加载中…'"
       icon-bg="linear-gradient(135deg, rgba(202,138,4,0.12), rgba(234,179,8,0.12))"
       icon-color="var(--icon-yellow)"
       :back-to="to.jobs.detail(jobId)"
       back-label="返回任务详情"
     >
       <template #icon><icon-edit /></template>
-      <template #actions>
-        <ui-button @click="handleCancel">取消</ui-button>
-      </template>
     </PageHeader>
 
-    <!-- 任务未找到 -->
-    <div v-if="loading" class="empty-state-block"><ui-spin size="2.25em" /></div>
-    <ui-card v-else-if="!job" class="empty-state-block">
-      <ui-empty description="未找到该任务">
-        <ui-button type="primary" @click="router.push(to.jobs.list())">
-          返回任务列表
-        </ui-button>
-      </ui-empty>
-    </ui-card>
-
-    <!-- 开发中提示 -->
-    <ui-card v-else class="min-w-0 lg:sticky lg:top-[var(--space-6)]">
-      <template #title>
-        <div class="flex items-center gap-2">
-          <icon-info-circle class="h-5 w-5 text-[var(--accent)]" />
-          <span>功能说明</span>
-        </div>
+    <FormPageLayout
+      :loading="loading"
+      :ready="!!job"
+      empty-description="未找到该任务"
+    >
+      <template #empty-action>
+        <ui-button type="primary" @click="router.push(to.jobs.list())">返回任务列表</ui-button>
       </template>
 
-      <div class="mb-5 flex items-start gap-3 rounded-xl border border-sky-200 bg-sky-50/70 p-4">
-        <icon-info-circle class="mt-0.5 flex-shrink-0 text-sky-600" />
-        <div class="flex flex-col">
-          <p class="text-sm font-semibold text-slate-900">任务编辑功能正在开发中</p>
-          <p class="mt-1 text-sm leading-6 text-slate-600">
-            目前您可以通过以下方式修改任务：
-          </p>
-          <ul class="mt-1 list-disc pl-4 text-sm leading-6 text-slate-600">
-            <li>通过 API 端点直接更新任务定义</li>
-            <li>删除现有任务后重新创建</li>
-            <li>联系系统管理员进行配置</li>
-          </ul>
-          <div class="mt-4 flex flex-wrap gap-2">
-            <ui-button type="outline" size="small" @click="router.push(to.jobs.detail(jobId))">
-              查看任务详情
-            </ui-button>
-            <ui-button type="primary" size="small" @click="router.push(to.jobs.create())">
-              创建新任务
-            </ui-button>
-          </div>
-        </div>
-      </div>
+      <template #main>
+        <ui-card class="min-w-0">
+          <template #title>
+            <div class="flex items-center gap-2">
+              <icon-edit class="h-4 w-4 text-[var(--accent)]" />
+              <span>编辑基本信息</span>
+            </div>
+          </template>
 
-      <!-- 只读信息展示 -->
-      <div class="mt-2">
-        <h3 class="mb-4 text-[15px] font-semibold text-slate-900">当前配置（只读）</h3>
+          <SmartForm ref="formRef" v-model="formData" :fields="formFields" />
 
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div class="flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-white/[58%]">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">任务标识符</span>
-            <code class="text-sm font-medium text-slate-900">{{ job.key }}</code>
+          <div v-if="formData.schedule_enabled" class="mt-6 rounded-xl border border-dashed p-4 border-slate-200 bg-slate-50">
+            <div class="text-xs font-semibold tracking-wider text-amber-700">快捷预设：</div>
+            <div class="mt-3 flex flex-wrap gap-2">
+              <ui-tag
+                v-for="preset in cronPresets"
+                :key="preset.value"
+                class="cursor-pointer [transition-property:transform] hover:-translate-y-px"
+                @click="applyCronPreset(preset.value)"
+              >
+                {{ preset.label }}
+              </ui-tag>
+            </div>
           </div>
+        </ui-card>
+      </template>
 
-          <div class="flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-white/[58%]">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">任务名称</span>
-            <span class="text-sm font-medium text-slate-900">{{ job.name }}</span>
-          </div>
+      <template #aside>
+        <ui-card class="min-w-0 lg:sticky lg:top-[var(--space-6)]">
+          <template #title>
+            <div class="flex items-center gap-2">
+              <icon-info-circle class="h-4 w-4 text-[var(--accent)]" />
+              <span>不可修改项</span>
+            </div>
+          </template>
 
-          <div class="flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-white/[58%]">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">插件</span>
-            <code class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-mono font-semibold text-slate-700 border-slate-200 bg-white/[64%]">{{ job.plugin_key }}</code>
+          <div class="flex flex-col gap-3">
+            <div class="flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
+              <span class="text-xs font-semibold tracking-wider text-slate-500">任务标识符</span>
+              <code class="text-sm font-medium text-slate-700">{{ job?.key }}</code>
+            </div>
+            <div class="flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
+              <span class="text-xs font-semibold tracking-wider text-slate-500">插件</span>
+              <code class="text-sm font-medium text-slate-700">{{ job?.plugin_key }}</code>
+            </div>
+            <div class="flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
+              <span class="text-xs font-semibold tracking-wider text-slate-500">动作</span>
+              <span class="text-sm font-medium text-[var(--accent)]">{{ job?.action }}</span>
+            </div>
           </div>
+        </ui-card>
+      </template>
 
-          <div class="flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-white/[58%]">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">动作</span>
-            <span class="inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold text-[var(--accent)] border-slate-200 bg-slate-50">{{ job.action }}</span>
-          </div>
-
-          <div class="col-span-full flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-white/[58%]" v-if="job.schedule?.cron_expression">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">Cron 表达式</span>
-            <code class="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-mono font-semibold text-amber-700">{{ job.schedule.cron_expression }}</code>
-          </div>
-
-          <div class="col-span-full flex flex-col gap-2 rounded-xl border p-4 border-slate-200 bg-white/[58%]" v-if="job.input">
-            <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">输入参数</span>
-            <pre class="overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-4 text-xs leading-6 text-slate-300 whitespace-pre-wrap break-all">{{ JSON.stringify(job.input, null, 2) }}</pre>
-          </div>
-        </div>
-      </div>
-    </ui-card>
+      <template #actions>
+        <FormActionBar
+          cancel-text="取消"
+          submit-text="保存修改"
+          submit-loading-text="保存中…"
+          :submit-loading="patch.loading.value"
+          @cancel="router.push(to.jobs.detail(jobId))"
+          @submit="handleSave"
+        />
+      </template>
+    </FormPageLayout>
   </div>
 </template>

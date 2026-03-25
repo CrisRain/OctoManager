@@ -1,29 +1,68 @@
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useCreateAccountType } from "@/composables/useAccountTypes";
 import { useMessage } from "@/composables";
-import { PageHeader } from "@/components/index";
+import { FormActionBar, FormPageLayout, PageHeader, SmartForm } from "@/components/index";
+import type { FieldConfig } from "@/components/smart-form.types";
 import { to } from "@/router/registry";
+import { Notification } from "@/lib/feedback";
 
 const router = useRouter();
 const message = useMessage();
 const create = useCreateAccountType();
 
-const key = ref("");
-const name = ref("");
-const category = ref("generic");
+const formRef = ref<InstanceType<typeof SmartForm>>();
+const formData = ref({
+  key: "",
+  name: "",
+  category: "generic",
+});
+
+const formFields = computed<FieldConfig[]>(() => [
+  {
+    name: "key",
+    label: "键名",
+    type: "text",
+    placeholder: "github",
+    required: true,
+  },
+  {
+    name: "name",
+    label: "显示名称",
+    type: "text",
+    placeholder: "GitHub",
+    required: true,
+  },
+  {
+    name: "category",
+    label: "分类",
+    type: "select",
+    required: true,
+    options: [
+      { label: "generic", value: "generic" },
+      { label: "email", value: "email" },
+      { label: "system", value: "system" },
+    ],
+  },
+]);
 
 async function handleCreate() {
+  const isValid = formRef.value?.validate();
+  if (!isValid) {
+    message.error("请检查表单填写是否正确");
+    return;
+  }
   try {
     await create.execute({
-      key: key.value.trim(),
-      name: name.value.trim(),
-      category: category.value,
+      key: formData.value.key.trim(),
+      name: formData.value.name.trim(),
+      category: formData.value.category,
       schema: {},
       capabilities: {},
     });
     message.success("账号类型已创建");
+    Notification.info({ title: "下一步", content: "为该账号类型添加账号，录入真实的凭证信息", duration: 6000 });
     router.push(to.accountTypes.list());
   } catch (e) {
     message.error(e instanceof Error ? e.message : "创建失败");
@@ -44,33 +83,59 @@ async function handleCreate() {
       <template #icon><icon-layers /></template>
     </PageHeader>
 
-    <ui-card>
-      <ui-form layout="vertical">
-        <ui-form-item label="键名">
-          <ui-input v-model="key" placeholder="github" />
-        </ui-form-item>
-        <ui-form-item label="显示名称">
-          <ui-input v-model="name" placeholder="GitHub" />
-        </ui-form-item>
-        <ui-form-item label="分类">
-          <ui-select v-model="category">
-            <ui-option value="generic">generic</ui-option>
-            <ui-option value="email">email</ui-option>
-            <ui-option value="system">system</ui-option>
-          </ui-select>
-        </ui-form-item>
-        <div class="mt-4 flex items-center justify-end gap-2 border-t border-slate-100 pt-4">
-          <ui-button @click="router.push(to.accountTypes.list())">取消</ui-button>
-          <ui-button
-            type="primary"
-            :disabled="!key.trim() || !name.trim()"
-            :loading="create.loading.value"
-            @click="handleCreate"
-          >
-            {{ create.loading.value ? "创建中…" : "创建账号类型" }}
-          </ui-button>
-        </div>
-      </ui-form>
-    </ui-card>
+    <FormPageLayout>
+      <template #main>
+        <ui-card class="min-w-0">
+          <template #title>
+            <div class="flex items-center gap-2">
+              <icon-layers class="h-5 w-5 text-[#0284c7]" />
+              <span>基本信息</span>
+            </div>
+          </template>
+          <SmartForm
+            ref="formRef"
+            v-model="formData"
+            :fields="formFields"
+          />
+        </ui-card>
+      </template>
+
+      <template #aside>
+        <ui-card class="min-w-0 lg:sticky lg:top-[var(--space-6)]">
+          <template #title>
+            <div class="flex items-center gap-2">
+              <icon-info-circle class="h-5 w-5 text-[#0284c7]" />
+              <span>关于账号类型</span>
+            </div>
+          </template>
+          <div class="flex flex-col gap-4">
+            <div class="rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
+              <p class="text-sm leading-6 text-slate-500">
+                账号类型定义了一组凭据规范，允许系统与不同的外部服务建立连接。
+              </p>
+            </div>
+            <div class="rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
+              <h4 class="mb-3 text-sm font-semibold text-slate-900">注意事项</h4>
+              <ul class="pl-5 text-sm leading-7 text-slate-600 list-disc">
+                <li>键名 (Key) 必须唯一，且创建后无法修改。</li>
+                <li>通常由插件自动注册，手动创建主要用于测试。</li>
+              </ul>
+            </div>
+          </div>
+        </ui-card>
+      </template>
+
+      <template #actions>
+        <FormActionBar
+          cancel-text="取消"
+          submit-text="创建账号类型"
+          submit-loading-text="创建中…"
+          :submit-disabled="!formData.key.trim() || !formData.name.trim()"
+          :submit-loading="create.loading.value"
+          @cancel="router.push(to.accountTypes.list())"
+          @submit="handleCreate"
+        />
+      </template>
+    </FormPageLayout>
   </div>
 </template>

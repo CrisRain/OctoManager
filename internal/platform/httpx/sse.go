@@ -9,32 +9,32 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 )
 
-// SSEWriter writes Server-Sent Events to an underlying writer.
-type SSEWriter struct {
+// StreamWriter writes newline-delimited JSON (NDJSON) events to an underlying writer.
+// Each event is a JSON object {"event":"<name>","data":<payload>} followed by a newline.
+type StreamWriter struct {
 	w *bufio.Writer
 }
 
-// WriteEvent marshals payload and sends a named SSE event.
-func (s *SSEWriter) WriteEvent(event string, payload any) error {
-	data, err := json.Marshal(payload)
+// WriteEvent marshals payload and sends a named NDJSON event line.
+func (s *StreamWriter) WriteEvent(event string, payload any) error {
+	msg := map[string]any{
+		"event": event,
+		"data":  payload,
+	}
+	data, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
-	if event != "" {
-		if _, err := fmt.Fprintf(s.w, "event: %s\n", event); err != nil {
-			return err
-		}
-	}
-	if _, err := fmt.Fprintf(s.w, "data: %s\n\n", data); err != nil {
+	if _, err := fmt.Fprintf(s.w, "%s\n", data); err != nil {
 		return err
 	}
 	return s.w.Flush()
 }
 
-// PrepareSSE sets SSE headers on the Hertz response and calls fn in a goroutine.
-// The response is streamed via io.Pipe so Hertz can serve it as a body stream.
-func PrepareSSE(c *app.RequestContext, fn func(w *SSEWriter)) {
-	c.Response.Header.Set("Content-Type", "text/event-stream")
+// PrepareStream sets chunked-streaming headers on the Hertz response and calls fn in a goroutine.
+// The response body is NDJSON (application/x-ndjson), one event per line.
+func PrepareStream(c *app.RequestContext, fn func(w *StreamWriter)) {
+	c.Response.Header.Set("Content-Type", "application/x-ndjson")
 	c.Response.Header.Set("Cache-Control", "no-cache")
 	c.Response.Header.Set("Connection", "keep-alive")
 	c.Response.Header.Set("X-Accel-Buffering", "no")
@@ -43,10 +43,20 @@ func PrepareSSE(c *app.RequestContext, fn func(w *SSEWriter)) {
 
 	go func() {
 		bw := bufio.NewWriter(pw)
-		fn(&SSEWriter{w: bw})
+		fn(&StreamWriter{w: bw})
 		_ = bw.Flush()
 		pw.Close()
 	}()
 
 	c.SetBodyStream(pr, -1)
+}
+
+// SSEWriter is kept as an alias so callers can be migrated incrementally.
+// Deprecated: use StreamWriter.
+type SSEWriter = StreamWriter
+
+// PrepareSSE is kept for backward compatibility.
+// Deprecated: use PrepareStream.
+func PrepareSSE(c *app.RequestContext, fn func(w *SSEWriter)) {
+	PrepareStream(c, fn)
 }

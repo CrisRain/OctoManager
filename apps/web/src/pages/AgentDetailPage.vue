@@ -166,7 +166,7 @@ async function handleStop() {
           <div class="flex flex-wrap items-center gap-2">
             <StatusTag :status="displayState" />
             <span
-              class="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
+              class="inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium transition-colors"
               :class="connected
                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
                 : 'border-slate-200 bg-white/60 text-slate-500'"
@@ -220,17 +220,17 @@ async function handleStop() {
           <div class="flex flex-wrap items-center gap-2">
             <StatusTag :status="displayState" />
 
-            <div class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500">
+            <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500">
               <span>插件</span>
               <code class="text-xs font-semibold text-slate-900 font-mono">{{ agent.plugin_key }}</code>
             </div>
 
-            <div class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500">
+            <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500">
               <span>动作</span>
               <code class="text-xs font-semibold text-slate-900 font-mono">{{ agent.action }}</code>
             </div>
 
-            <div class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500">
+            <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs text-slate-500">
               <span>日志连接</span>
               <span class="font-medium text-slate-900">{{ streamLabel }}</span>
             </div>
@@ -274,30 +274,28 @@ async function handleStop() {
               <ui-card>
                 <template #title>
                   <div class="flex items-center gap-2">
-                    <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-[var(--accent)]/10 text-[var(--accent)]">
-                      <icon-dashboard class="h-4 w-4" />
-                    </div>
+                    <icon-dashboard class="h-4 w-4 text-[var(--accent)]" />
                     运行状态
                   </div>
                 </template>
                 <div class="flex flex-col divide-y divide-slate-100">
-                  <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col">
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-24">Agent ID</span>
+                  <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500 min-w-24">Agent ID</span>
                     <span class="text-sm font-mono font-medium text-slate-900">#{{ agent.id }}</span>
                   </div>
 
-                  <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col">
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-24">实时状态</span>
+                  <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500 min-w-24">实时状态</span>
                     <StatusTag :status="displayState" />
                   </div>
 
-                  <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col">
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-24">期望状态</span>
+                  <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500 min-w-24">期望状态</span>
                     <StatusTag :status="displayDesired" />
                   </div>
 
-                  <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col">
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-24">日志连接</span>
+                  <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500 min-w-24">日志连接</span>
                     <div class="flex items-center gap-2">
                       <span
                         class="h-2 w-2 rounded-full"
@@ -307,26 +305,26 @@ async function handleStop() {
                     </div>
                   </div>
 
-                  <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col">
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-24">插件</span>
+                  <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500 min-w-24">插件</span>
                     <code class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-mono font-semibold text-slate-700">{{ agent.plugin_key }}</code>
                   </div>
 
-                  <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col">
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-24">动作</span>
+                  <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500 min-w-24">动作</span>
                     <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700">{{ agent.action }}</span>
                   </div>
 
-                  <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col">
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-24">最近心跳</span>
+                  <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500 min-w-24">最近心跳</span>
                     <div class="flex flex-col items-end gap-1 text-right max-md:items-start max-md:text-left">
                       <span class="text-sm font-medium text-slate-900">{{ formatTimestamp(displayHeartbeatAt, "relative") }}</span>
                       <span class="text-xs text-slate-400">{{ formatTimestamp(displayHeartbeatAt) }}</span>
                     </div>
                   </div>
 
-                  <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col">
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-24">状态更新</span>
+                  <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500 min-w-24">状态更新</span>
                     <div class="flex flex-col items-end gap-1 text-right max-md:items-start max-md:text-left">
                       <span class="text-sm font-medium text-slate-900">{{ formatTimestamp(displayStatusUpdatedAt, "relative") }}</span>
                       <span class="text-xs text-slate-400">{{ formatTimestamp(displayStatusUpdatedAt) }}</span>
@@ -347,9 +345,7 @@ async function handleStop() {
               <ui-card>
                 <template #title>
                   <div class="flex items-center gap-2">
-                    <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-purple-50 text-purple-600">
-                      <icon-code-block class="h-4 w-4" />
-                    </div>
+                    <icon-code-block class="h-4 w-4 text-purple-600" />
                     输入参数
                   </div>
                 </template>
@@ -367,7 +363,7 @@ async function handleStop() {
                       </div>
                       <button
                         type="button"
-                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                        class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-all hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
                         @click="handleCopy(`${key} 字段`, stringifyInputValue(value))"
                       >
                         <icon-copy class="h-3.5 w-3.5" />
@@ -375,7 +371,7 @@ async function handleStop() {
                       </button>
                     </div>
 
-                    <pre v-if="isBlockValue(value)" class="overflow-auto rounded-xl border border-slate-200 bg-slate-950 p-4 text-xs leading-6 text-slate-300 whitespace-pre-wrap break-all">{{ stringifyInputValue(value) }}</pre>
+                    <pre v-if="isBlockValue(value)" class="overflow-auto rounded-xl border border-slate-200 bg-slate-50 shadow-sm p-4 text-xs leading-relaxed text-slate-600 font-mono whitespace-pre-wrap break-all">{{ stringifyInputValue(value) }}</pre>
                     <div v-else class="rounded-lg border border-slate-200 bg-white px-4 py-3">
                       <span class="text-sm font-mono font-medium text-slate-900">{{ stringifyInputValue(value) }}</span>
                     </div>
@@ -392,15 +388,13 @@ async function handleStop() {
               <ui-card>
                 <template #title>
                   <div class="flex items-center gap-2">
-                    <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600">
-                      <icon-info-circle class="h-4 w-4" />
-                    </div>
+                    <icon-info-circle class="h-4 w-4 text-sky-600" />
                     连接状态
                   </div>
                 </template>
                 <div class="flex flex-col divide-y divide-slate-100">
-                  <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col">
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">日志流</span>
+                  <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500">日志流</span>
                     <div class="flex items-center gap-2">
                       <span
                         class="h-2 w-2 rounded-full"
@@ -410,18 +404,18 @@ async function handleStop() {
                     </div>
                   </div>
 
-                  <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col">
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">状态同步</span>
+                  <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500">状态同步</span>
                     <span class="text-sm font-medium text-slate-900">{{ statusSyncLabel }}</span>
                   </div>
 
-                  <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col">
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">最近状态</span>
+                  <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500">最近状态</span>
                     <span class="text-sm font-medium text-slate-900">{{ stateLabel || "—" }}</span>
                   </div>
 
-                  <div class="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0 max-md:flex-col">
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">日志条数</span>
+                  <div class="flex items-center justify-between gap-4 py-4 max-md:flex-col max-md:items-start max-md:gap-2">
+                    <span class="text-xs font-semibold tracking-wider text-slate-500">日志条数</span>
                     <span class="text-sm font-medium text-slate-900">{{ logCount }}</span>
                   </div>
                 </div>
@@ -431,9 +425,7 @@ async function handleStop() {
               <ui-card>
                 <template #title>
                   <div class="flex items-center gap-2">
-                    <div class="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-                      <icon-thunderbolt class="h-4 w-4" />
-                    </div>
+                    <icon-thunderbolt class="h-4 w-4 text-slate-500" />
                     快捷操作
                   </div>
                 </template>
@@ -443,7 +435,7 @@ async function handleStop() {
                 <div class="mt-4 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 hover:-translate-y-px"
+                    class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 hover:-translate-y-px"
                     @click="router.push(pluginDetailPath)"
                   >
                     <icon-apps class="h-4 w-4" />
@@ -451,7 +443,7 @@ async function handleStop() {
                   </button>
                   <button
                     type="button"
-                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 hover:-translate-y-px"
+                    class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 hover:-translate-y-px"
                     @click="handleCopy('Agent ID', String(agent.id))"
                   >
                     <icon-copy class="h-4 w-4" />
@@ -459,7 +451,7 @@ async function handleStop() {
                   </button>
                   <button
                     type="button"
-                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 hover:-translate-y-px"
+                    class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 transition-all hover:border-slate-300 hover:bg-slate-50 hover:-translate-y-px"
                     @click="handleCopy('插件动作', `${agent.plugin_key}:${agent.action}`)"
                   >
                     <icon-copy class="h-4 w-4" />
@@ -482,11 +474,11 @@ async function handleStop() {
                 </p>
               </div>
               <div class="flex flex-wrap gap-2">
-                <div class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500">
+                <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500">
                   <span>连接状态</span>
                   <span class="font-medium text-slate-900">{{ streamLabel }}</span>
                 </div>
-                <div class="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500">
+                <div class="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-500">
                   <span>最近心跳</span>
                   <span class="font-medium text-slate-900">{{ formatTimestamp(displayHeartbeatAt, "relative") }}</span>
                 </div>

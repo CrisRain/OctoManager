@@ -68,13 +68,13 @@ function onBackdropClick(event: MouseEvent) {
         v-if="visible"
         v-bind="{ ...attrs, class: undefined }"
         :class="cx('ui-drawer-container fixed inset-0 z-[450] flex', attrs.class as string)"
-        style="background: rgba(15, 23, 42, 0.4); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px)"
+        style="background: var(--drawer-overlay)"
         @click="onBackdropClick"
       >
         <Transition :name="`drawer-slide-${placement}`" appear>
           <section
             v-if="visible"
-            :class="cx('ui-drawer flex w-full max-w-full flex-col bg-white shadow-2xl', panelClass)"
+            :class="cx('ui-drawer flex w-full max-w-full flex-col bg-white shadow-none', panelClass)"
             :style="panelStyle"
             @click.stop
           >

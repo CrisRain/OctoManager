@@ -3,6 +3,7 @@ package agentapp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -12,16 +13,21 @@ import (
 
 	agentdomain "octomanger/internal/domains/agents/domain"
 	agentpostgres "octomanger/internal/domains/agents/infra/postgres"
-	pluginapp "octomanger/internal/domains/plugins/app"
 	plugindomain "octomanger/internal/domains/plugins/domain"
+	"octomanger/internal/platform/logbatch"
 )
+
+// pluginExecutor is the narrow interface agentapp needs from the plugin backend.
+type pluginExecutor interface {
+	Execute(ctx context.Context, pluginKey string, request plugindomain.ExecutionRequest, onEvent func(plugindomain.ExecutionEvent)) error
+}
 
 const statusCacheTTL = 5 * time.Second
 
 type Service struct {
 	logger            *zap.Logger
 	repo              agentpostgres.Repository
-	plugins           pluginapp.Service
+	plugins           pluginExecutor
 	rdb               *redis.Client // nil = cache disabled
 	workerID          string
 	loopInterval      time.Duration
@@ -33,7 +39,7 @@ type Service struct {
 func New(
 	logger *zap.Logger,
 	repo agentpostgres.Repository,
-	plugins pluginapp.Service,
+	plugins pluginExecutor,
 	rdb *redis.Client,
 	workerID string,
 	loopInterval time.Duration,
@@ -100,6 +106,10 @@ func (s *Service) Create(ctx context.Context, input agentdomain.CreateAgentInput
 	return s.repo.Create(ctx, input)
 }
 
+func (s *Service) Patch(ctx context.Context, agentID int64, input agentdomain.PatchAgentInput) (*agentdomain.Agent, error) {
+	return s.repo.Patch(ctx, agentID, input)
+}
+
 func (s *Service) Start(ctx context.Context, agentID int64) error {
 	if err := s.repo.SetDesiredState(ctx, agentID, "running"); err != nil {
 		return err
@@ -140,6 +150,18 @@ func (s *Service) GetStatus(ctx context.Context, agentID int64) (*agentdomain.Ag
 	status := agentToStatus(agent)
 	s.writeStatusCache(ctx, status)
 	return &status, nil
+}
+
+func (s *Service) Delete(ctx context.Context, agentID int64) error {
+	s.invalidateStatusCache(ctx, agentID)
+	s.mu.Lock()
+	cancel := s.activeAgentCancel[agentID]
+	delete(s.activeAgentCancel, agentID)
+	s.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	return s.repo.Delete(ctx, agentID)
 }
 
 func (s *Service) ListLogsAfter(ctx context.Context, agentID int64, afterID int64) ([]agentdomain.AgentLog, error) {
@@ -213,6 +235,14 @@ func (s *Service) runAgentLoop(ctx context.Context, agent agentdomain.Agent) {
 			s.logger.Sugar().Errorw("update agent runtime state failed", "agent_id", agent.ID, "error", err)
 		}
 
+		var pluginError string
+
+		batchCtx, cancelBatch := context.WithCancel(context.Background())
+		batcher := logbatch.New[agentdomain.AgentLogEntry](func(ctx context.Context, entries []agentdomain.AgentLogEntry) error {
+			return s.repo.AppendLogBatch(ctx, entries)
+		})
+		go batcher.Run(batchCtx)
+
 		runErr := s.plugins.Execute(ctx, agent.PluginKey, plugindomain.ExecutionRequest{
 			Mode:   "agent",
 			Action: agent.Action,
@@ -226,29 +256,48 @@ func (s *Service) runAgentLoop(ctx context.Context, agent agentdomain.Agent) {
 			if event.Type == "" && event.Message == "" {
 				return // skip empty heartbeat events
 			}
-			if err := s.repo.AppendLog(ctx, agent.ID, event.Type, event.Message, event.Data); err != nil {
-				s.logger.Sugar().Errorw("append agent log failed", "agent_id", agent.ID, "error", err)
+			if event.Type == "error" && pluginError == "" {
+				pluginError = event.Message
+				if pluginError == "" {
+					pluginError = event.Error
+				}
 			}
+			batcher.Add(agentdomain.AgentLogEntry{
+				AgentID:   agent.ID,
+				EventType: event.Type,
+				Message:   event.Message,
+				Payload:   event.Data,
+			})
 		})
+
+		cancelBatch()
+		batcher.Wait()
+		if runErr == nil && pluginError != "" {
+			runErr = errors.New(pluginError)
+		}
 
 		heartbeat = time.Now().UTC()
 		if runErr != nil {
 			_ = s.repo.AppendLog(ctx, agent.ID, "error", runErr.Error(), nil)
 			_ = s.updateRuntimeState(ctx, agent.ID, "error", runErr.Error(), &heartbeat)
+			backoffTimer := time.NewTimer(s.errorBackoff)
 			select {
 			case <-ctx.Done():
+				backoffTimer.Stop()
 				return
-			case <-time.After(s.errorBackoff):
+			case <-backoffTimer.C:
 				continue
 			}
 		}
 
 		_ = s.updateRuntimeState(ctx, agent.ID, "idle", "", &heartbeat)
 
+		loopTimer := time.NewTimer(s.loopInterval)
 		select {
 		case <-ctx.Done():
+			loopTimer.Stop()
 			return
-		case <-time.After(s.loopInterval):
+		case <-loopTimer.C:
 		}
 	}
 }

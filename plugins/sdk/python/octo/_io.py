@@ -8,6 +8,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ._response import error
+from ._sink import emit_event
 
 _IPC_PROTOCOL = "octo.ipc.v1"
 _LOG_CONTEXT: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar("octo_log_context", default={})
@@ -35,26 +36,30 @@ def emit_log(*args: Any, **fields: Any) -> None:
         extra_message = None
 
     payload: dict[str, Any] = {
-        "status": "log",
-        "level": str(level).strip() or "info",
+        "type": "log",
         "message": primary_message,
     }
+    data: dict[str, Any] = {
+        "level": str(level).strip() or "info",
+    }
     if extra_message is not None:
-        payload["detail_message"] = str(extra_message)
+        data["detail_message"] = str(extra_message)
 
     context_fields = _LOG_CONTEXT.get()
     for key, value in context_fields.items():
         if value is None:
             continue
         key_str = str(key)
-        if key_str in payload or key_str in fields:
+        if key_str in data or key_str in fields:
             continue
-        payload[key_str] = value
+        data[key_str] = value
     for key, value in fields.items():
         if value is None:
             continue
-        payload[str(key)] = value
-    print(json.dumps(payload, ensure_ascii=False), flush=True)
+        data[str(key)] = value
+    if data:
+        payload["data"] = data
+    emit_event(payload)
 
 
 @contextlib.contextmanager
@@ -73,51 +78,58 @@ def log_context(**fields: Any) -> Any:
 
 
 def emit_daemon_init_ok(message: str = "", **fields: Any) -> None:
-    payload: dict[str, Any] = {"status": "init_ok"}
+    data: dict[str, Any] = {"status": "init_ok"}
+    payload: dict[str, Any] = {"type": "progress", "data": data}
     if str(message).strip():
         payload["message"] = str(message)
     for key, value in fields.items():
         if value is None:
             continue
-        payload[str(key)] = value
-    print(json.dumps(payload, ensure_ascii=False), flush=True)
+        data[str(key)] = value
+    emit_event(payload)
 
 
 def emit_daemon_event(result: dict[str, Any] | None = None, message: str = "", **fields: Any) -> None:
-    payload: dict[str, Any] = {"status": "event", "result": result or {}}
+    data: dict[str, Any] = dict(result or {})
+    data["status"] = "event"
+    payload: dict[str, Any] = {"type": "progress", "data": data}
     if str(message).strip():
         payload["message"] = str(message)
     for key, value in fields.items():
         if value is None:
             continue
-        payload[str(key)] = value
-    print(json.dumps(payload, ensure_ascii=False), flush=True)
+        data[str(key)] = value
+    emit_event(payload)
 
 
 def emit_daemon_done(message: str = "", **fields: Any) -> None:
-    payload: dict[str, Any] = {"status": "done"}
+    data: dict[str, Any] = {"status": "done"}
+    payload: dict[str, Any] = {"type": "progress", "data": data}
     if str(message).strip():
         payload["message"] = str(message)
     for key, value in fields.items():
         if value is None:
             continue
-        payload[str(key)] = value
-    print(json.dumps(payload, ensure_ascii=False), flush=True)
+        data[str(key)] = value
+    emit_event(payload)
 
 
 def emit_daemon_error(code: str, message: str, details: dict[str, Any] | None = None, **fields: Any) -> None:
     payload: dict[str, Any] = {
-        "status": "error",
-        "error_code": str(code).strip() or "UNEXPECTED_ERROR",
-        "error_message": str(message).strip() or "unexpected error",
+        "type": "error",
+        "error": str(code).strip() or "UNEXPECTED_ERROR",
+        "message": str(message).strip() or "unexpected error",
     }
+    data: dict[str, Any] = {}
     if details:
-        payload["result"] = {"details": details}
+        data["details"] = details
     for key, value in fields.items():
         if value is None:
             continue
-        payload[str(key)] = value
-    print(json.dumps(payload, ensure_ascii=False), flush=True)
+        data[str(key)] = value
+    if data:
+        payload["data"] = data
+    emit_event(payload)
 
 
 def run_module(handler: Callable[[dict[str, Any]], dict[str, Any]], argv: list[str] | None = None) -> int:
@@ -133,7 +145,7 @@ def _run_stream(handler: Callable[[dict[str, Any]], dict[str, Any]]) -> int:
         try:
             request_payload, envelope_id = _extract_stream_request(line)
         except Exception as exc:
-            print(json.dumps(error("BAD_INPUT", f"invalid stream request: {exc}"), ensure_ascii=False), flush=True)
+            emit_event(error("BAD_INPUT", f"invalid stream request: {exc}"))
             continue
         output = _execute_handler(handler, request_payload)
         if envelope_id:
@@ -143,9 +155,9 @@ def _run_stream(handler: Callable[[dict[str, Any]], dict[str, Any]]) -> int:
                 "id": envelope_id,
                 "payload": output,
             }
-            print(json.dumps(wrapped, ensure_ascii=False), flush=True)
+            emit_event(wrapped)
             continue
-        print(json.dumps(output, ensure_ascii=False), flush=True)
+        emit_event(output)
     return 0
 
 

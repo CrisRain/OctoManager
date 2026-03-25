@@ -12,21 +12,26 @@ import (
 
 	jobdomain "octomanger/internal/domains/jobs/domain"
 	jobpostgres "octomanger/internal/domains/jobs/infra/postgres"
-	pluginapp "octomanger/internal/domains/plugins/app"
 	plugindomain "octomanger/internal/domains/plugins/domain"
+	"octomanger/internal/platform/logbatch"
 )
+
+// pluginExecutor is the narrow interface jobapp needs from the plugin backend.
+type pluginExecutor interface {
+	Execute(ctx context.Context, pluginKey string, request plugindomain.ExecutionRequest, onEvent func(plugindomain.ExecutionEvent)) error
+}
 
 type Service struct {
 	logger   *zap.Logger
 	repo     jobpostgres.Repository
-	plugins  pluginapp.Service
+	plugins  pluginExecutor
 	workerID string
 }
 
 func New(
 	logger *zap.Logger,
 	repo jobpostgres.Repository,
-	plugins pluginapp.Service,
+	plugins pluginExecutor,
 	workerID string,
 ) Service {
 	return Service{
@@ -55,6 +60,14 @@ func (s Service) CreateDefinition(ctx context.Context, input jobdomain.CreateDef
 		nextRunAt = &next
 	}
 	return s.repo.CreateDefinition(ctx, input, nextRunAt)
+}
+
+func (s Service) PatchDefinition(ctx context.Context, id int64, input jobdomain.PatchDefinitionInput) (*jobdomain.JobDefinition, error) {
+	return s.repo.PatchDefinition(ctx, id, input)
+}
+
+func (s Service) DeleteDefinition(ctx context.Context, id int64) error {
+	return s.repo.DeleteDefinition(ctx, id)
 }
 
 func (s Service) EnqueueExecution(
@@ -109,9 +122,9 @@ func (s Service) ExecuteDefinitionDirect(
 		case "result":
 			resultPayload = event.Data
 		case "error":
-			errorMessage = event.Error
+			errorMessage = event.Message
 			if errorMessage == "" {
-				errorMessage = event.Message
+				errorMessage = event.Error
 			}
 		}
 	})
@@ -140,6 +153,12 @@ func (s Service) ProcessNextExecution(ctx context.Context) (bool, error) {
 		errorMessage  string
 	)
 
+	batchCtx, cancelBatch := context.WithCancel(context.Background())
+	batcher := logbatch.New[jobdomain.JobLogEntry](func(ctx context.Context, entries []jobdomain.JobLogEntry) error {
+		return s.repo.AppendLogBatch(ctx, entries)
+	})
+	go batcher.Run(batchCtx)
+
 	err = s.plugins.Execute(ctx, execution.PluginKey, plugindomain.ExecutionRequest{
 		Mode:   "job",
 		Action: execution.Action,
@@ -149,21 +168,28 @@ func (s Service) ProcessNextExecution(ctx context.Context) (bool, error) {
 			"worker_id":    s.workerID,
 		},
 	}, func(event plugindomain.ExecutionEvent) {
-		payload := event.Data
 		switch event.Type {
 		case "result":
-			resultPayload = payload
+			resultPayload = event.Data
 		case "error":
-			errorMessage = event.Error
+			errorMessage = event.Message
 			if errorMessage == "" {
-				errorMessage = event.Message
+				errorMessage = event.Error
 			}
 		}
-
-		if err := s.repo.AppendLog(ctx, execution.ID, "plugin", event.Type, event.Message, payload); err != nil {
-			s.logger.Sugar().Errorw("append job log failed", "execution_id", execution.ID, "error", err)
-		}
+		batcher.Add(jobdomain.JobLogEntry{
+			ExecutionID: execution.ID,
+			Stream:      "plugin",
+			EventType:   event.Type,
+			Message:     event.Message,
+			Payload:     event.Data,
+		})
 	})
+
+	// Drain all buffered log entries before recording the final execution state,
+	// so the streaming handler always sees complete logs before the "state" event.
+	cancelBatch()
+	batcher.Wait()
 	if err != nil {
 		if finishErr := s.repo.FinishExecution(ctx, execution.ID, jobdomain.StatusFailed, "plugin execution failed", nil, err.Error()); finishErr != nil {
 			return true, finishErr

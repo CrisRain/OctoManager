@@ -1,7 +1,31 @@
 import { ref, onMounted } from "vue";
 import { storeToRefs } from "pinia";
+import { getAccount } from "@/api";
 import { useAccountsStore } from "@/store";
-import type { AccountExecuteInput, AccountExecuteResult, AccountPatchInput } from "@/types";
+import type { Account, AccountExecuteInput, AccountPatchInput } from "@/types";
+import { useAsyncAction } from "./useAsyncAction";
+
+export function useAccount(id: number) {
+  const data = ref<Account | null>(null);
+  const loading = ref(false);
+  const error = ref<string | null>(null);
+
+  async function refresh() {
+    loading.value = true;
+    error.value = null;
+    try {
+      data.value = await getAccount(id);
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : "请求失败";
+    } finally {
+      loading.value = false;
+    }
+  }
+
+  onMounted(() => { void refresh(); });
+
+  return { data, loading, error, refresh };
+}
 
 export function useAccounts() {
   const store = useAccountsStore();
@@ -17,92 +41,23 @@ export function useAccounts() {
 }
 
 export function useCreateAccount() {
-  const loading = ref(false);
-  const error = ref<string | null>(null);
   const store = useAccountsStore();
-
-  async function execute(payload: Parameters<typeof store.create>[0]) {
-    loading.value = true;
-    error.value = null;
-    try {
-      const result = await store.create(payload);
-      return result;
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : "请求失败";
-      throw e;
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  return { loading, error, execute };
+  return useAsyncAction((payload: Parameters<typeof store.create>[0]) => store.create(payload));
 }
 
 export function usePatchAccount() {
-  const loading = ref(false);
-  const error = ref<string | null>(null);
   const store = useAccountsStore();
-
-  async function execute(id: number, payload: AccountPatchInput) {
-    loading.value = true;
-    error.value = null;
-    try {
-      const result = await store.update(id, payload);
-      return result;
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : "请求失败";
-      throw e;
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  return { loading, error, execute };
+  return useAsyncAction((id: number, payload: AccountPatchInput) => store.update(id, payload));
 }
 
 export function useExecuteAccount() {
-  const loading = ref(false);
-  const error = ref<string | null>(null);
   const store = useAccountsStore();
-
-  async function execute(
-    id: number,
-    action: string,
-    params: Record<string, unknown> = {},
-  ): Promise<AccountExecuteResult> {
-    loading.value = true;
-    error.value = null;
-    try {
-      const result = await store.execute(id, { action, params } as AccountExecuteInput);
-      return result;
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : "请求失败";
-      throw e;
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  return { loading, error, execute };
+  return useAsyncAction((id: number, action: string, params: Record<string, unknown> = {}) =>
+    store.execute(id, { action, params } as AccountExecuteInput),
+  );
 }
 
 export function useDeleteAccount() {
-  const loading = ref(false);
-  const error = ref<string | null>(null);
   const store = useAccountsStore();
-
-  async function execute(id: number) {
-    loading.value = true;
-    error.value = null;
-    try {
-      await store.remove(id);
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : "请求失败";
-      throw e;
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  return { loading, error, execute };
+  return useAsyncAction((id: number) => store.remove(id));
 }

@@ -10,6 +10,7 @@ import (
 	jobapp "octomanger/internal/domains/jobs/app"
 	triggerdomain "octomanger/internal/domains/triggers/domain"
 	triggerpostgres "octomanger/internal/domains/triggers/infra/postgres"
+	"octomanger/internal/platform/dbutil"
 )
 
 type Service struct {
@@ -26,6 +27,10 @@ func New(repo triggerpostgres.Repository, jobs jobapp.Service) Service {
 
 func (s Service) List(ctx context.Context) ([]triggerdomain.Trigger, error) {
 	return s.repo.List(ctx)
+}
+
+func (s Service) Get(ctx context.Context, triggerID int64) (*triggerdomain.Trigger, error) {
+	return s.repo.GetByID(ctx, triggerID)
 }
 
 func (s Service) Create(ctx context.Context, input triggerdomain.CreateInput) (*triggerdomain.CreateResult, error) {
@@ -50,6 +55,10 @@ func (s Service) Create(ctx context.Context, input triggerdomain.CreateInput) (*
 		Trigger:       *trigger,
 		DeliveryToken: token,
 	}, nil
+}
+
+func (s Service) Patch(ctx context.Context, triggerID int64, input triggerdomain.PatchTriggerInput) (*triggerdomain.Trigger, error) {
+	return s.repo.Patch(ctx, triggerID, input)
 }
 
 func (s Service) Delete(ctx context.Context, triggerID int64) error {
@@ -79,7 +88,7 @@ func (s Service) FireByKey(ctx context.Context, key string, token string, input 
 }
 
 func (s Service) fire(ctx context.Context, trigger triggerdomain.Trigger, input map[string]any) (*triggerdomain.FireResult, error) {
-	mergedInput := mergeMaps(trigger.DefaultInput, input)
+	mergedInput := dbutil.MergeMaps(trigger.DefaultInput, input)
 
 	if trigger.Mode == "sync" {
 		result, events, err := s.jobs.ExecuteDefinitionDirect(ctx, trigger.JobDefinitionID, mergedInput)
@@ -112,16 +121,6 @@ func (s Service) fire(ctx context.Context, trigger triggerdomain.Trigger, input 
 	}, nil
 }
 
-func mergeMaps(base map[string]any, override map[string]any) map[string]any {
-	merged := map[string]any{}
-	for key, value := range base {
-		merged[key] = value
-	}
-	for key, value := range override {
-		merged[key] = value
-	}
-	return merged
-}
 
 func newToken() (string, error) {
 	buffer := make([]byte, 16)

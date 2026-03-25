@@ -11,19 +11,23 @@ import (
 	accountapp "octomanger/internal/domains/accounts/app"
 	accountdomain "octomanger/internal/domains/accounts/domain"
 	accountpostgres "octomanger/internal/domains/accounts/infra/postgres"
-	pluginapp "octomanger/internal/domains/plugins/app"
 	plugindomain "octomanger/internal/domains/plugins/domain"
 	"octomanger/internal/platform/auth"
 	"octomanger/internal/platform/httpx"
 )
 
+// pluginExecutor is the narrow interface accounts transport needs.
+type pluginExecutor interface {
+	Execute(ctx context.Context, pluginKey string, request plugindomain.ExecutionRequest, onEvent func(plugindomain.ExecutionEvent)) error
+}
+
 type Handler struct {
 	adminKey string
 	service  accountapp.Service
-	plugins  pluginapp.Service
+	plugins  pluginExecutor
 }
 
-func NewHandler(adminKey string, service accountapp.Service, plugins pluginapp.Service) Handler {
+func NewHandler(adminKey string, service accountapp.Service, plugins pluginExecutor) Handler {
 	return Handler{adminKey: adminKey, service: service, plugins: plugins}
 }
 

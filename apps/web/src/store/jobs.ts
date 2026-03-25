@@ -1,7 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import { createJobDefinition, enqueueJobExecution, listJobDefinitions, listJobExecutions } from "@/api";
-import type { JobDefinition, JobDefinitionCreateInput, JobExecution } from "@/types";
+import { createJobDefinition, deleteJobDefinition, enqueueJobExecution, listJobDefinitions, listJobExecutions, patchJobDefinition } from "@/api";
+import type { JobDefinition, JobDefinitionCreateInput, JobDefinitionPatchInput, JobExecution } from "@/types";
 import { normalizeListResponse } from "@/utils/normalizeListResponse";
 
 export const useJobsStore = defineStore("jobs", () => {
@@ -9,15 +9,16 @@ export const useJobsStore = defineStore("jobs", () => {
   const jobExecutions = ref<JobExecution[]>([]);
   const loadingDefinitions = ref(false);
   const loadingExecutions = ref(false);
-  const error = ref<string | null>(null);
+  const errorDefinitions = ref<string | null>(null);
+  const errorExecutions = ref<string | null>(null);
 
   async function fetchJobDefinitions() {
     loadingDefinitions.value = true;
-    error.value = null;
+    errorDefinitions.value = null;
     try {
       jobDefinitions.value = normalizeListResponse<JobDefinition>(await listJobDefinitions());
     } catch (e) {
-      error.value = e instanceof Error ? e.message : "请求失败";
+      errorDefinitions.value = e instanceof Error ? e.message : "请求失败";
     } finally {
       loadingDefinitions.value = false;
     }
@@ -25,11 +26,11 @@ export const useJobsStore = defineStore("jobs", () => {
 
   async function fetchJobExecutions() {
     loadingExecutions.value = true;
-    error.value = null;
+    errorExecutions.value = null;
     try {
       jobExecutions.value = normalizeListResponse<JobExecution>(await listJobExecutions());
     } catch (e) {
-      error.value = e instanceof Error ? e.message : "请求失败";
+      errorExecutions.value = e instanceof Error ? e.message : "请求失败";
     } finally {
       loadingExecutions.value = false;
     }
@@ -47,15 +48,29 @@ export const useJobsStore = defineStore("jobs", () => {
     return result;
   }
 
+  async function patchDefinition(id: number, payload: JobDefinitionPatchInput) {
+    const result = await patchJobDefinition(id, payload);
+    jobDefinitions.value = jobDefinitions.value.map((d) => (d.id === id ? result : d));
+    return result;
+  }
+
+  async function deleteDefinition(id: number) {
+    await deleteJobDefinition(id);
+    jobDefinitions.value = jobDefinitions.value.filter((d) => d.id !== id);
+  }
+
   return {
     jobDefinitions,
     jobExecutions,
     loadingDefinitions,
     loadingExecutions,
-    error,
+    errorDefinitions,
+    errorExecutions,
     fetchJobDefinitions,
     fetchJobExecutions,
     createDefinition,
+    patchDefinition,
+    deleteDefinition,
     enqueueExecution,
   };
 });

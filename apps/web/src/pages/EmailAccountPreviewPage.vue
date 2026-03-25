@@ -263,10 +263,10 @@ function htmlToText(html: string) {
       </template>
     </PageHeader>
 
-    <div v-if="loading" class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center border-slate-200 bg-white/[56%] shadow-sm">
+    <div v-if="loading" class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center border-slate-200 bg-white/55 shadow-sm">
       <ui-spin size="2.25em" />
     </div>
-    <div v-else-if="!account" class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center border-slate-200 bg-white/[56%] shadow-sm">
+    <div v-else-if="!account" class="flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed px-6 py-16 text-center border-slate-200 bg-white/55 shadow-sm">
       <p class="text-sm leading-6 text-slate-500">未找到该邮箱账号。</p>
     </div>
 
@@ -370,7 +370,7 @@ function htmlToText(html: string) {
             v-for="item in messageItems"
             :key="item.id"
             type="button"
-            class="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-slate-400/20"
+            class="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-inset focus-visible:ring-2 focus-visible:ring-[var(--accent)]/50"
             :class="item.id === selectedMessageId ? 'bg-slate-50' : ''"
             @click="selectedMessageId = item.id"
           >
@@ -427,7 +427,7 @@ function htmlToText(html: string) {
               <span class="self-center text-xs font-semibold uppercase tracking-[0.08em] text-slate-400">时间</span>
               <span class="text-xs text-slate-500">{{ formatDate(messageDetail?.date || selectedMessageSummary?.date, true) }}</span>
             </div>
-            <div v-if="selectedFlags.length" class="mt-3 flex flex-wrap gap-1.5">
+            <div v-if="selectedFlags.length" class="mt-3 flex flex-wrap gap-2">
               <ui-tag v-for="flag in selectedFlags" :key="flag" size="small">{{ formatFlag(flag) }}</ui-tag>
             </div>
           </div>
@@ -472,7 +472,7 @@ function htmlToText(html: string) {
                     :key="key"
                     class="grid grid-cols-[minmax(10em,18ch)_minmax(0,1fr)] gap-4 border-b border-slate-100 px-4 py-3 last:border-b-0 max-md:grid-cols-1"
                   >
-                    <span class="text-xs font-semibold uppercase tracking-[0.08em] text-slate-500">{{ key }}</span>
+                    <span class="text-xs font-semibold tracking-wider text-slate-500">{{ key }}</span>
                     <span class="break-all font-mono text-xs text-slate-800">{{ value }}</span>
                   </div>
                 </div>

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -58,9 +59,26 @@ type WorkerConfig struct {
 }
 
 type PluginsConfig struct {
+	// Local plugin process configuration used by the worker-managed gRPC launcher.
 	ModulesDir string
 	SDKDir     string
 	PythonBin  string
+	Timeout    PluginsTimeoutConfig
+
+	// Plugin gRPC service defaults used to initialize database-backed config.
+	// Set PLUGIN_GRPC_<KEY>_ADDR=host:port to override the initial address.
+	Services map[string]PluginServiceEntry // plugin key → gRPC connection info
+}
+
+// PluginServiceEntry holds the gRPC connection config for one plugin microservice.
+type PluginServiceEntry struct {
+	Address string // host:port of the plugin's gRPC server
+}
+
+type PluginsTimeoutConfig struct {
+	Account time.Duration
+	Job     time.Duration
+	Agent   time.Duration
 }
 
 type LoggingConfig struct {
@@ -102,6 +120,9 @@ func Load() (Config, error) {
 	v.SetDefault("plugins.python_bin", "python3")
 	v.SetDefault("plugins.modules_dir", "plugins/modules")
 	v.SetDefault("plugins.sdk_dir", "plugins/sdk/python")
+	v.SetDefault("plugins.timeout.account", "60s")
+	v.SetDefault("plugins.timeout.job", "10m")
+	v.SetDefault("plugins.timeout.agent", "0s")
 	v.SetDefault("logging.level", "info")
 	v.SetDefault("logging.format", "text")
 
@@ -162,6 +183,12 @@ func Load() (Config, error) {
 			ModulesDir: pickEnvOrKey(v, "PLUGINS_DIR", "plugins.modules_dir"),
 			SDKDir:     pickEnvOrKey(v, "PLUGIN_SDK_DIR", "plugins.sdk_dir"),
 			PythonBin:  pickEnvOrKey(v, "PYTHON_BIN", "plugins.python_bin"),
+			Timeout: PluginsTimeoutConfig{
+				Account: pickDurationEnvOrKey(v, "PLUGINS_TIMEOUT_ACCOUNT", "plugins.timeout.account"),
+				Job:     pickDurationEnvOrKey(v, "PLUGINS_TIMEOUT_JOB", "plugins.timeout.job"),
+				Agent:   pickDurationEnvOrKey(v, "PLUGINS_TIMEOUT_AGENT", "plugins.timeout.agent"),
+			},
+			Services: loadPluginServices(v),
 		},
 		Logging: LoggingConfig{
 			Level:    pickEnvOrKey(v, "LOG_LEVEL", "logging.level"),
@@ -169,6 +196,47 @@ func Load() (Config, error) {
 			Filename: pickEnvOrKey(v, "LOG_FILE", "logging.filename"),
 		},
 	}, nil
+}
+
+// loadPluginServices reads gRPC service addresses from the viper config.
+// Config-file path: plugins.services.<key>.address
+// Env var pattern:  PLUGIN_GRPC_<KEY>_ADDR  (e.g. PLUGIN_GRPC_OCTO_DEMO_ADDR)
+func loadPluginServices(v *viper.Viper) map[string]PluginServiceEntry {
+	services := map[string]PluginServiceEntry{
+		"octo_demo": {Address: "127.0.0.1:50051"},
+	}
+
+	// Read from structured config (plugins.services.* YAML/TOML section).
+	raw := v.GetStringMap("plugins.services")
+	for key, val := range raw {
+		if m, ok := val.(map[string]any); ok {
+			if addr, _ := m["address"].(string); strings.TrimSpace(addr) != "" {
+				services[key] = PluginServiceEntry{Address: strings.TrimSpace(addr)}
+			}
+		}
+	}
+
+	// Overlay with any PLUGIN_GRPC_<KEY>_ADDR environment variables so that
+	// individual plugin addresses can be set without a config file.
+	for _, env := range os.Environ() {
+		const prefix = "PLUGIN_GRPC_"
+		const suffix = "_ADDR"
+		if !strings.HasPrefix(env, prefix) {
+			continue
+		}
+		parts := strings.SplitN(env, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		name, addr := parts[0], strings.TrimSpace(parts[1])
+		if !strings.HasSuffix(name, suffix) || addr == "" {
+			continue
+		}
+		key := strings.ToLower(strings.TrimPrefix(strings.TrimSuffix(name, suffix), prefix))
+		services[key] = PluginServiceEntry{Address: addr}
+	}
+
+	return services
 }
 
 func MustLoad() Config {
@@ -186,4 +254,15 @@ func pickEnvOrKey(v *viper.Viper, envKey, viperKey string) string {
 		return val
 	}
 	return v.GetString(viperKey)
+}
+
+func pickDurationEnvOrKey(v *viper.Viper, envKey, viperKey string) time.Duration {
+	if val := strings.TrimSpace(v.GetString(envKey)); val != "" {
+		if parsed, err := time.ParseDuration(val); err == nil {
+			return parsed
+		} else {
+			slog.Warn("invalid duration env var, using default", "key", envKey, "value", val, "error", err)
+		}
+	}
+	return v.GetDuration(viperKey)
 }

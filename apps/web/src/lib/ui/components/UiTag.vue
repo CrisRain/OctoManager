@@ -19,7 +19,7 @@ const attrs = useAttrs();
 
 const classes = computed(() =>
   cx(
-    "ui-tag glass inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-semibold tracking-[-0.01em]",
+    "ui-tag glass inline-flex items-center gap-2 rounded-full border px-2.5 py-1 font-semibold tracking-[-0.01em]",
     props.size === "small" ? "text-[0.72rem]" : "text-[0.78rem]",
     TAG_TONE_CLASS[props.color] ?? TAG_TONE_CLASS.gray,
     attrs.class as string,

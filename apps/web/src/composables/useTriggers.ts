@@ -1,7 +1,8 @@
-import { ref, onMounted } from "vue";
+import { onMounted } from "vue";
 import { storeToRefs } from "pinia";
 import { useTriggersStore } from "@/store";
 import type { TriggerFireInput, TriggerFireResult } from "@/types";
+import { useAsyncAction } from "./useAsyncAction";
 
 export function useTriggers() {
   const store = useTriggersStore();
@@ -17,69 +18,25 @@ export function useTriggers() {
 }
 
 export function useCreateTrigger() {
-  const loading = ref(false);
-  const error = ref<string | null>(null);
   const store = useTriggersStore();
+  return useAsyncAction((payload: Parameters<typeof store.create>[0]) => store.create(payload));
+}
 
-  async function execute(payload: Parameters<typeof store.create>[0]) {
-    loading.value = true;
-    error.value = null;
-    try {
-      const result = await store.create(payload);
-      return result;
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : "请求失败";
-      throw e;
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  return { loading, error, execute };
+export function usePatchTrigger() {
+  const store = useTriggersStore();
+  return useAsyncAction((id: number, payload: Parameters<typeof store.update>[1]) =>
+    store.update(id, payload),
+  );
 }
 
 export function useDeleteTrigger() {
-  const loading = ref(false);
-  const error = ref<string | null>(null);
   const store = useTriggersStore();
-
-  async function execute(id: number) {
-    loading.value = true;
-    error.value = null;
-    try {
-      await store.remove(id);
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : "请求失败";
-      throw e;
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  return { loading, error, execute };
+  return useAsyncAction((id: number) => store.remove(id));
 }
 
 export function useFireTrigger() {
-  const loading = ref(false);
-  const error = ref<string | null>(null);
-  const result = ref<unknown>(null);
   const store = useTriggersStore();
-
-  async function execute(id: number, payload?: TriggerFireInput): Promise<TriggerFireResult> {
-    loading.value = true;
-    error.value = null;
-    result.value = null;
-    try {
-      const res = await store.fire(id, payload);
-      result.value = res;
-      return res;
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : "请求失败";
-      throw e;
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  return { loading, error, result, execute };
+  return useAsyncAction((id: number, payload?: TriggerFireInput): Promise<TriggerFireResult> =>
+    store.fire(id, payload),
+  );
 }

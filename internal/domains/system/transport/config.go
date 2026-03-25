@@ -19,10 +19,6 @@ func (h Handler) getConfig(ctx context.Context, c *app.RequestContext) {
 	}
 	val, err := h.service.GetConfig(ctx, key)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			httpx.NotFound(ctx, c, "config not found")
-			return
-		}
 		httpx.InternalServerError(ctx, c, err.Error())
 		return
 	}

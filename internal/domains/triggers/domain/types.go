@@ -29,6 +29,12 @@ type CreateResult struct {
 	DeliveryToken string  `json:"delivery_token"`
 }
 
+type PatchTriggerInput struct {
+	Name    *string `json:"name,omitempty"`
+	Mode    *string `json:"mode,omitempty"`
+	Enabled *bool   `json:"enabled,omitempty"`
+}
+
 type FireResult struct {
 	Mode        string         `json:"mode"`
 	TriggerKey  string         `json:"trigger_key"`

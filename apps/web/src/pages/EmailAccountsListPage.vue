@@ -11,6 +11,7 @@ import { to } from "@/router/registry";
 const router = useRouter();
 
 const columns = [
+  { title: "ID", width: "80", slotName: "id" },
   { title: "邮箱地址", dataIndex: "address", slotName: "address" },
   { title: "服务商", dataIndex: "provider", slotName: "provider" },
   { title: "状态", dataIndex: "status", slotName: "status" },
@@ -143,6 +144,11 @@ const {
         row-key="id"
         :row-selection="{ type: 'checkbox' }"
       >
+        <!-- ID -->
+        <template #id="{ record }">
+          <code class="text-xs font-mono font-semibold text-slate-500">#{{ record.id }}</code>
+        </template>
+
         <!-- 邮箱地址 -->
         <template #address="{ record }">
           <div class="flex items-center gap-3">
@@ -201,7 +207,7 @@ const {
           <div class="flex min-w-0 flex-1 flex-col gap-0.5">
             <div class="truncate text-sm font-semibold text-slate-900">{{ record.address }}</div>
             <div class="text-xs text-slate-500">
-              <code class="inline-flex items-center rounded border border-slate-200 bg-slate-100 px-1.5 py-0.5 text-xs font-mono text-slate-600">{{ record.provider }}</code>
+              <code class="text-xs text-slate-500 mono">#{{ record.id }} · {{ record.provider }}</code>
             </div>
           </div>
           <RowActionsMenu
@@ -228,7 +234,7 @@ const {
 
       <ui-card
         v-if="!loading && !filteredAccounts.length"
-        class="rounded-xl border border-slate-200 bg-white shadow-sm px-5 py-8"
+        class="col-span-full empty-state-block"
       >
         <ui-empty description="暂无邮箱账号">
           <ui-button type="primary" @click="router.push(to.emailAccounts.create())">
@@ -264,7 +270,7 @@ const {
           <span class="font-medium text-emerald-600">成功 {{ bulkResult.filter(r => r.ok).length }}</span>
           <span class="font-medium text-red-600">失败 {{ bulkResult.filter(r => !r.ok).length }}</span>
         </div>
-        <div class="flex max-h-64 flex-col gap-1.5 overflow-y-auto rounded-xl border border-slate-200 p-3">
+        <div class="flex max-h-64 flex-col gap-2 overflow-y-auto rounded-xl border border-slate-200 p-3">
           <div
             v-for="(item, i) in bulkResult"
             :key="i"

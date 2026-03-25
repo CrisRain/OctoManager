@@ -1,6 +1,100 @@
+import { render, createVNode, ref, h } from "vue";
+import { UiModal, UiButton, UiInput } from "@/lib/ui";
+
+function openModal(options: any): Promise<boolean> {
+  return new Promise((resolve) => {
+    const mountNode = document.createElement("div");
+    document.body.appendChild(mountNode);
+
+    const visible = ref(true);
+    const inputValue = ref("");
+    const inputError = ref("");
+
+    const destroy = () => {
+      visible.value = false;
+      setTimeout(() => {
+        render(null, mountNode);
+        mountNode.remove();
+      }, 300); // Wait for transition
+    };
+
+    const handleOk = () => {
+      if (options.withInput) {
+        if (options.requiredText && inputValue.value !== options.requiredText) {
+          inputError.value = `输入内容必须为：${options.requiredText}`;
+          return;
+        }
+        if (!options.requiredText && !inputValue.value.trim()) {
+          inputError.value = "输入内容不能为空";
+          return;
+        }
+      }
+      resolve(true);
+      destroy();
+    };
+
+    const handleCancel = () => {
+      resolve(false);
+      destroy();
+    };
+
+    const vnode = createVNode({
+      setup() {
+        return () => {
+          const bodyContent: any[] = [];
+          bodyContent.push(h("div", { class: "whitespace-pre-wrap text-sm text-slate-600 mb-4" }, options.content));
+
+          if (options.withInput) {
+            const reqHint = options.requiredText ? `请输入 ${options.requiredText} 确认` : options.placeholder;
+            bodyContent.push(
+              h("div", { class: "flex flex-col gap-1" }, [
+                h(UiInput, {
+                  modelValue: inputValue.value,
+                  "onUpdate:modelValue": (val: string) => {
+                    inputValue.value = val;
+                    inputError.value = "";
+                  },
+                  placeholder: reqHint,
+                  status: inputError.value ? "error" : undefined,
+                  autofocus: true,
+                  onKeyup: (e: KeyboardEvent) => {
+                    if (e.key === "Enter") handleOk();
+                  }
+                }),
+                inputError.value ? h("span", { class: "text-xs text-red-500 mt-1" }, inputError.value) : null
+              ])
+            );
+          }
+
+          return h(UiModal, {
+            visible: visible.value,
+            "onUpdate:visible": (val: boolean) => {
+              if (!val) handleCancel();
+            },
+            title: options.title,
+            maskClosable: false,
+          }, {
+            default: () => bodyContent,
+            footer: () => h("div", { class: "flex items-center justify-end gap-3 w-full" }, [
+              h(UiButton, { onClick: handleCancel }, () => options.cancelText || "取消"),
+              h(UiButton, { 
+                type: "primary", 
+                status: options.okButtonProps?.status || "normal",
+                onClick: handleOk,
+              }, () => options.okText || "确定")
+            ])
+          });
+        };
+      }
+    });
+
+    render(vnode, mountNode);
+  });
+}
+
 /**
  * 统一的确认对话框系统
- * 使用浏览器原生 confirm/prompt，避免依赖第三方 UI 组件库。
+ * 使用模态框代替原生 confirm/prompt。
  */
 export const useConfirm = () => {
   const confirm = (
@@ -12,9 +106,11 @@ export const useConfirm = () => {
       okButtonProps?: { status?: "danger" | "success" | "warning" | "normal" };
     },
   ): Promise<boolean> => {
-    const prefix = title ? `${title}\n\n` : "";
-    const hint = options?.okText ? `\n\n确认: ${options.okText}` : "";
-    return Promise.resolve(window.confirm(`${prefix}${content}${hint}`));
+    return openModal({
+      content,
+      title,
+      ...options,
+    });
   };
 
   const confirmDanger = (
@@ -76,22 +172,17 @@ export const useConfirm = () => {
     options?: {
       requiredText?: string;
       okText?: string;
+      cancelText?: string;
+      okButtonProps?: { status?: "danger" | "success" | "warning" | "normal" };
     },
   ): Promise<boolean> => {
-    const requirement = options?.requiredText
-      ? `\n\n请输入 ${options.requiredText} 来确认`
-      : `\n\n${placeholder}`;
-    const value = window.prompt(`${title}\n\n${content}${requirement}`, "");
-
-    if (value === null) {
-      return Promise.resolve(false);
-    }
-
-    if (options?.requiredText) {
-      return Promise.resolve(value === options.requiredText);
-    }
-
-    return Promise.resolve(value.trim().length > 0);
+    return openModal({
+      content,
+      title,
+      placeholder,
+      withInput: true,
+      ...options,
+    });
   };
 
   const confirmDangerWithInput = (
@@ -102,6 +193,7 @@ export const useConfirm = () => {
     return confirmWithInput(content, title, `请输入 ${confirmText} 确认`, {
       requiredText: confirmText,
       okText: "确认删除",
+      okButtonProps: { status: "danger" },
     });
   };
 

@@ -1,35 +1,87 @@
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { useRouter } from "vue-router";
-import { IconRobot, IconPlus } from "@/lib/icons";
+import { IconRobot } from "@/lib/icons";
 
-import { PageHeader, SmartForm } from "@/components/index";
+import { FormActionBar, FormPageLayout, PageHeader, SmartForm } from "@/components/index";
+import { useAccounts, useMessage, useErrorHandler, usePlugins } from "@/composables";
 import { useCreateAgent } from "@/composables/useAgents";
-import { useMessage, useErrorHandler } from "@/composables";
+import type { Account } from "@/types";
 import type { FieldConfig } from "@/components/smart-form.types";
 import { to } from "@/router/registry";
+import { buildAgentInput, formatAccountOptionLabel, parseAgentParamsJSON } from "@/utils/agentForm";
 
 const router = useRouter();
 const message = useMessage();
 const { withErrorHandler } = useErrorHandler();
 const create = useCreateAgent();
+const { data: accounts } = useAccounts();
+const { data: plugins } = usePlugins();
 
 // 表单引用
 const formRef = ref<InstanceType<typeof SmartForm>>();
 
 // 表单数据
-const formData = reactive({
+const formData = ref({
   name: "",
   plugin_key: "",
   action: "",
-  // 预设输入参数
-  username: "",
-  // 扩展JSON输入
-  extra_input: "{}",
+  account_id: "",
+  params_json: "{}",
 });
 
-// 表单字段配置
-const formFields: FieldConfig[] = [
+const pluginOptions = computed(() =>
+  plugins.value
+    .filter((plugin) => plugin.healthy)
+    .map((plugin) => ({
+      label: plugin.manifest.name ? `${plugin.manifest.name} (${plugin.manifest.key})` : plugin.manifest.key,
+      value: plugin.manifest.key,
+    })),
+);
+
+const selectedPlugin = computed(() =>
+  plugins.value.find((plugin) => plugin.manifest.key === formData.value.plugin_key) ?? null,
+);
+
+const actionOptions = computed(() =>
+  (selectedPlugin.value?.manifest.actions ?? []).map((action) => ({
+    label: action.name ? `${action.name} (${action.key})` : action.key,
+    value: action.key,
+  })),
+);
+
+const filteredAccounts = computed(() =>
+  accounts.value.filter((account) => {
+    if (!formData.value.plugin_key) {
+      return true;
+    }
+    return account.account_type_key === formData.value.plugin_key;
+  }),
+);
+
+const accountOptions = computed(() =>
+  filteredAccounts.value.map((account) => ({
+    label: formatAccountOptionLabel(account),
+    value: String(account.id),
+  })),
+);
+
+const selectedAccount = computed<Account | null>(() =>
+  filteredAccounts.value.find((account) => String(account.id) === formData.value.account_id)
+  ?? accounts.value.find((account) => String(account.id) === formData.value.account_id)
+  ?? null,
+);
+
+watch(() => formData.value.plugin_key, () => {
+  if (!actionOptions.value.some((option) => option.value === formData.value.action)) {
+    formData.value.action = "";
+  }
+  if (!accountOptions.value.some((option) => option.value === formData.value.account_id)) {
+    formData.value.account_id = "";
+  }
+});
+
+const formFields = computed<FieldConfig[]>(() => [
   {
     name: "name",
     label: "Agent 名称",
@@ -40,36 +92,41 @@ const formFields: FieldConfig[] = [
   },
   {
     name: "plugin_key",
-    label: "插件标识符",
-    type: "text",
-    placeholder: "例如: github",
+    label: "插件",
+    type: "select",
+    placeholder: pluginOptions.value.length ? "请选择插件" : "暂无可用插件",
     required: true,
-    description: "要调用的插件标识符",
+    description: "只展示当前可用的插件",
+    options: pluginOptions.value,
   },
   {
     name: "action",
     label: "动作名称",
-    type: "text",
-    placeholder: "例如: verify_profile",
+    type: "select",
+    placeholder: formData.value.plugin_key ? "请选择动作" : "请先选择插件",
     required: true,
-    description: "插件中定义的动作名称",
+    description: "动作列表来自插件 manifest",
+    options: actionOptions.value,
   },
   {
-    name: "username",
-    label: "用户名参数",
-    type: "text",
-    placeholder: "例如: octocat",
-    description: "将作为 input.username 传递给插件",
+    name: "account_id",
+    label: "关联账号",
+    type: "select",
+    placeholder: accountOptions.value.length ? "从账号库中选择一个账号" : "当前插件下暂无账号",
+    description: formData.value.plugin_key
+      ? "提交时会自动写入 input.account"
+      : "先选择插件，再从账号库中挑选对应账号",
+    options: accountOptions.value,
   },
   {
-    name: "extra_input",
-    label: "额外输入参数 (JSON)",
+    name: "params_json",
+    label: "动作参数 (JSON)",
     type: "textarea",
-    placeholder: '{"key":"value"}',
-    description: "额外的JSON格式输入参数，将与基础参数合并",
-    rows: 4,
+    placeholder: '{"interval_seconds":60}',
+    description: "将写入 input.params，必须是 JSON 对象",
+    rows: 6,
   },
-];
+]);
 
 // 提交创建
 async function handleSubmit() {
@@ -80,32 +137,21 @@ async function handleSubmit() {
     return;
   }
 
-  // 构建输入参数
-  const input: Record<string, unknown> = {};
-
-  // 添加用户名（如果有）
-  if (formData.username.trim()) {
-    input.username = formData.username.trim();
-  }
-
-  // 合并额外参数
+  let params: Record<string, unknown> = {};
   try {
-    if (formData.extra_input.trim()) {
-      const extra = JSON.parse(formData.extra_input) as Record<string, unknown>;
-      Object.assign(input, extra);
-    }
-  } catch (e) {
-    message.error("额外输入参数格式错误，请检查 JSON 格式");
+    params = parseAgentParamsJSON(formData.value.params_json);
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : "动作参数格式错误，请检查 JSON");
     return;
   }
 
   await withErrorHandler(
     async () => {
       await create.execute({
-        name: formData.name.trim(),
-        plugin_key: formData.plugin_key.trim(),
-        action: formData.action.trim(),
-        input,
+        name: formData.value.name.trim(),
+        plugin_key: formData.value.plugin_key.trim(),
+        action: formData.value.action.trim(),
+        input: buildAgentInput(selectedAccount.value, params),
       });
       message.success("Agent 已创建");
       router.push(to.agents.list());
@@ -121,7 +167,7 @@ function handleCancel() {
 </script>
 
 <template>
-  <div class="page-shell agent-create-page">
+  <div class="page-shell">
     <PageHeader
       title="创建 Agent"
       subtitle="创建一个持续运行的 Agent"
@@ -133,95 +179,98 @@ function handleCancel() {
       <template #icon><icon-robot /></template>
     </PageHeader>
 
-    <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,_1.45fr)_minmax(16em,_0.85fr)]">
-      <!-- 表单卡片 -->
-      <ui-card class="min-w-0">
-        <template #title>
-          <div class="flex items-center gap-2">
-            <icon-robot class="h-5 w-5 text-[var(--accent)]" />
-            <span>基本信息</span>
-          </div>
-        </template>
+    <FormPageLayout>
+      <template #main>
+        <ui-card class="min-w-0">
+          <template #title>
+            <div class="flex items-center gap-2">
+              <icon-robot class="h-5 w-5 text-[var(--accent)]" />
+              <span>基本信息</span>
+            </div>
+          </template>
 
-        <SmartForm
-          ref="formRef"
-          v-model="formData"
-          :fields="formFields"
+          <SmartForm
+            ref="formRef"
+            v-model="formData"
+            :fields="formFields"
+          />
+        </ui-card>
+      </template>
+
+      <template #aside>
+        <ui-card class="min-w-0 lg:sticky lg:top-[var(--space-6)]">
+          <template #title>
+            <div class="flex items-center gap-2">
+              <icon-info-circle class="h-5 w-5 text-[var(--accent)]" />
+              <span>关于 Agent</span>
+            </div>
+          </template>
+
+          <div class="flex flex-col gap-4">
+            <div class="rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
+              <h4 class="mb-3 text-sm font-semibold text-slate-900">什么是 Agent？</h4>
+              <p class="text-sm leading-6 text-slate-500">
+                Agent 是持续运行的插件进程，可以持续执行特定任务，例如监控数据变化、定期同步信息等。
+              </p>
+            </div>
+
+            <div class="rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
+              <h4 class="mb-3 text-sm font-semibold text-slate-900">任务生命周期</h4>
+              <div class="flex flex-col gap-3">
+                <div class="flex items-start gap-3 rounded-lg border p-3 border-slate-200 bg-white shadow-sm">
+                  <span class="mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full bg-slate-300"></span>
+                  <div class="flex flex-col gap-0.5">
+                    <div class="text-sm font-semibold text-slate-900">已停止 (stopped)</div>
+                    <div class="text-xs leading-5 text-slate-500">Agent 创建后的初始状态</div>
+                  </div>
+                </div>
+                <div class="flex items-start gap-3 rounded-lg border p-3 border-slate-200 bg-white shadow-sm">
+                  <span class="mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full bg-emerald-500"></span>
+                  <div class="flex flex-col gap-0.5">
+                    <div class="text-sm font-semibold text-slate-900">运行中 (running)</div>
+                    <div class="text-xs leading-5 text-slate-500">Agent 正在运行，可持续接收事件</div>
+                  </div>
+                </div>
+                <div class="flex items-start gap-3 rounded-lg border p-3 border-slate-200 bg-white shadow-sm">
+                  <span class="mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full bg-sky-500"></span>
+                  <div class="flex flex-col gap-0.5">
+                    <div class="text-sm font-semibold text-slate-900">停止中 (stopping)</div>
+                    <div class="text-xs leading-5 text-slate-500">正在优雅停止 Agent</div>
+                  </div>
+                </div>
+                <div class="flex items-start gap-3 rounded-lg border p-3 border-slate-200 bg-white shadow-sm">
+                  <span class="mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full bg-red-500"></span>
+                  <div class="flex flex-col gap-0.5">
+                    <div class="text-sm font-semibold text-slate-900">错误 (error)</div>
+                    <div class="text-xs leading-5 text-slate-500">Agent 运行出错，需要检查配置</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
+              <h4 class="mb-3 text-sm font-semibold text-slate-900">使用场景</h4>
+              <ul class="pl-5 text-sm leading-7 text-slate-600 list-disc">
+                <li>持续监控 GitHub 仓库变化</li>
+                <li>定期检查邮箱新邮件</li>
+                <li>实时同步服务器状态</li>
+                <li>定时数据采集和处理</li>
+              </ul>
+            </div>
+          </div>
+        </ui-card>
+      </template>
+
+      <template #actions>
+        <FormActionBar
+          cancel-text="取消"
+          submit-text="创建 Agent"
+          submit-loading-text="创建中…"
+          :submit-loading="create.loading.value"
+          @cancel="handleCancel"
+          @submit="handleSubmit"
         />
-      </ui-card>
-
-      <!-- 说明卡片 -->
-      <ui-card class="min-w-0 lg:sticky lg:top-[var(--space-6)]">
-        <template #title>
-          <div class="flex items-center gap-2">
-            <icon-info-circle class="h-5 w-5 text-[var(--accent)]" />
-            <span>关于 Agent</span>
-          </div>
-        </template>
-
-        <div class="flex flex-col gap-4">
-          <h4 class="text-sm font-semibold text-slate-900">什么是 Agent？</h4>
-          <p class="text-sm leading-6 text-slate-500">
-            Agent 是持续运行的插件进程，可以持续执行特定任务，例如监控数据变化、定期同步信息等。
-          </p>
-
-          <h4 class="text-sm font-semibold text-slate-900">任务生命周期</h4>
-          <div class="flex flex-col gap-3">
-            <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
-              <span class="mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full bg-slate-300"></span>
-              <div class="flex flex-col gap-0.5">
-                <div class="text-sm font-semibold text-slate-900">已停止 (stopped)</div>
-                <div class="text-xs leading-5 text-slate-500">Agent 创建后的初始状态</div>
-              </div>
-            </div>
-            <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
-              <span class="mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full bg-emerald-500"></span>
-              <div class="flex flex-col gap-0.5">
-                <div class="text-sm font-semibold text-slate-900">运行中 (running)</div>
-                <div class="text-xs leading-5 text-slate-500">Agent 正在运行，可持续接收事件</div>
-              </div>
-            </div>
-            <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
-              <span class="mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full bg-sky-500"></span>
-              <div class="flex flex-col gap-0.5">
-                <div class="text-sm font-semibold text-slate-900">停止中 (stopping)</div>
-                <div class="text-xs leading-5 text-slate-500">正在优雅停止 Agent</div>
-              </div>
-            </div>
-            <div class="flex items-start gap-3 rounded-xl border p-4 border-slate-200 bg-slate-50 shadow-sm">
-              <span class="mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full bg-red-500"></span>
-              <div class="flex flex-col gap-0.5">
-                <div class="text-sm font-semibold text-slate-900">错误 (error)</div>
-                <div class="text-xs leading-5 text-slate-500">Agent 运行出错，需要检查配置</div>
-              </div>
-            </div>
-          </div>
-
-          <h4 class="text-sm font-semibold text-slate-900">使用场景</h4>
-          <ul class="pl-5 text-sm leading-7 text-slate-600">
-            <li>持续监控 GitHub 仓库变化</li>
-            <li>定期检查邮箱新邮件</li>
-            <li>实时同步服务器状态</li>
-            <li>定时数据采集和处理</li>
-          </ul>
-        </div>
-      </ui-card>
-    </div>
-
-    <!-- 底部操作栏 -->
-    <div class="flex items-center justify-end gap-3 rounded-xl border px-5 py-4 sticky bottom-[var(--space-4)] z-10 border-slate-200 bg-slate-50 shadow-sm backdrop-blur-xl backdrop-saturate-150 max-md:flex-col max-md:items-stretch max-md:bottom-[var(--space-3)]">
-      <ui-button size="large" @click="handleCancel">
-        取消
-      </ui-button>
-      <ui-button
-        type="primary"
-        size="large"
-        :loading="create.loading.value"
-        @click="handleSubmit"
-      >
-        <template #icon><icon-check /></template>
-        {{ create.loading.value ? "创建中…" : "创建 Agent" }}
-      </ui-button>
-    </div>
+      </template>
+    </FormPageLayout>
   </div>
 </template>

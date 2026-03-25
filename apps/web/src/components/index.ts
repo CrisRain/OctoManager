@@ -24,3 +24,5 @@ export { default as SmartListBar } from "./SmartListBar.vue";
 export { default as DetailDrawer } from "./DetailDrawer.vue";
 export { default as RowActionsMenu } from "./RowActionsMenu.vue";
 export { default as SmartForm } from "./SmartForm.vue";
+export { default as FormActionBar } from "./FormActionBar.vue";
+export { default as FormPageLayout } from "./FormPageLayout.vue";

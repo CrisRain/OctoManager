@@ -51,7 +51,7 @@ const wrapperClass = computed(() =>
 
 const inputClass = computed(() =>
   cx(
-    "ui-input w-full bg-transparent border-none outline-none text-slate-900 placeholder:text-slate-400",
+    "ui-input w-full bg-transparent border-none outline-none text-slate-900 placeholder:text-slate-500",
     INPUT_SIZE_CLASS[props.size] ?? INPUT_SIZE_CLASS.medium,
     props.disabled && "cursor-not-allowed",
   ),

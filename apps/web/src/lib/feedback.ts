@@ -46,7 +46,7 @@ function normalizeNotificationOptions(options: string | NotificationOptions | un
 
 const TOAST_TONE_CLASS: Record<ToastType, string> = {
   success: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  error: "border-red-200 bg-red-50 text-red-700",
+  error: "border-[#F4D26B] bg-[#FFF8E6] text-[#BD651F]", // Updated error tone matching design
   warning: "border-amber-200 bg-amber-50 text-amber-700",
   info: "border-sky-200 bg-sky-50 text-sky-700",
 };

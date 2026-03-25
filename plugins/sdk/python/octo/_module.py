@@ -124,11 +124,40 @@ class Module:
         return self
 
     def run(self) -> int:
+        """Start in subprocess / stdin-stdout IPC mode (default)."""
         self._write_manifest_if_needed()
         router = make_router()
         for action in self._actions.values():
             router.add(action.key, action.handler)
         return run_module(router.dispatch)
+
+    def serve(self, address: str = "[::]:50051", *, max_workers: int = 10) -> int:
+        """Start as a persistent gRPC microservice.
+
+        This replaces ``module.run()`` when the plugin is launched with
+        ``--grpc``.  The plugin listens on *address* and handles concurrent
+        requests from the Go worker via the PluginService gRPC API.
+
+        Requires:  pip install grpcio
+
+        Args:
+            address:     gRPC listen address, e.g. ``"[::]:50051"`` or
+                         ``"127.0.0.1:50051"``.
+            max_workers: Size of the thread pool used to handle concurrent RPCs.
+
+        Returns:
+            Exit code (0 = clean shutdown after SIGINT/SIGTERM).
+        """
+        from ._grpc_server import PluginServicer, serve as _serve
+
+        self._write_manifest_if_needed()
+        router = make_router()
+        for action in self._actions.values():
+            router.add(action.key, action.handler)
+
+        servicer = PluginServicer(router, self.manifest)
+        _serve(servicer, address=address, max_workers=max_workers)
+        return 0
 
     def manifest(self) -> dict[str, Any]:
         self._validate()

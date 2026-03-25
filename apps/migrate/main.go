@@ -17,7 +17,6 @@ import (
 
 	"octomanger/internal/platform/config"
 	"octomanger/internal/platform/database"
-	"octomanger/internal/platform/migrations"
 )
 
 func main() {
@@ -44,7 +43,7 @@ func main() {
 		}
 	}()
 
-	if err := migrations.Apply(ctx, targetDB, "db/migrations/*.sql"); err != nil {
+	if err := database.AutoMigrate(ctx, targetDB); err != nil {
 		panic(err)
 	}
 

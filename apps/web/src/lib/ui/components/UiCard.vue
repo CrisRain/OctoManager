@@ -16,6 +16,7 @@ const slots = useSlots();
 const attrs = useAttrs();
 
 const hasHeader = computed(() => Boolean(props.title || slots.title || slots.extra));
+const hasFooter = computed(() => Boolean(slots.footer));
 
 const sectionClass = computed(() =>
   cx(
@@ -40,5 +41,11 @@ const sectionClass = computed(() =>
     <div class="ui-card-body p-5">
       <slot />
     </div>
+    <footer
+      v-if="hasFooter"
+      class="ui-card-footer flex items-center justify-end gap-3 border-t border-slate-200 bg-white/72 px-5 py-4"
+    >
+      <slot name="footer" />
+    </footer>
   </section>
 </template>

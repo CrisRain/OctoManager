@@ -1,0 +1,365 @@
+{
+  "key": "octo_demo",
+  "name": "OctoDemo 演示",
+  "category": "generic",
+  "schema": {
+    "type": "object",
+    "properties": {
+      "username": {
+        "type": "string",
+        "title": "用户名",
+        "description": "fake_server 中的用户名"
+      },
+      "api_key": {
+        "type": "string",
+        "title": "API Key",
+        "description": "fake_server 返回的 API 密钥"
+      },
+      "base_url": {
+        "type": "string",
+        "title": "服务地址",
+        "description": "fake_server 监听地址，例如 http://127.0.0.1:18080",
+        "default": "http://127.0.0.1:18080"
+      }
+    },
+    "required": [
+      "username",
+      "api_key"
+    ]
+  },
+  "capabilities": {
+    "actions": [
+      {
+        "key": "VERIFY",
+        "description": "验证账号凭证是否有效"
+      },
+      {
+        "key": "GET_PROFILE",
+        "description": "获取用户资料，并将关键字段写回账号 spec"
+      },
+      {
+        "key": "LIST_TASKS",
+        "description": "分页查询账号下的任务",
+        "params": [
+          {
+            "name": "status",
+            "type": "string",
+            "required": false,
+            "description": "状态过滤"
+          },
+          {
+            "name": "priority",
+            "type": "string",
+            "required": false,
+            "description": "优先级过滤"
+          },
+          {
+            "name": "page",
+            "type": "string",
+            "default": "1",
+            "required": false,
+            "description": "页码"
+          },
+          {
+            "name": "page_size",
+            "type": "string",
+            "default": "20",
+            "required": false,
+            "description": "每页条数"
+          }
+        ]
+      },
+      {
+        "key": "CREATE_TASK",
+        "description": "创建新任务（mode=job，写入后台日志）",
+        "params": [
+          {
+            "name": "title",
+            "type": "string",
+            "required": true,
+            "description": "任务标题"
+          },
+          {
+            "name": "priority",
+            "type": "string",
+            "default": "medium",
+            "required": false,
+            "choices": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "description": "优先级"
+          }
+        ]
+      },
+      {
+        "key": "COMPLETE_TASK",
+        "description": "将指定任务标记为已完成",
+        "params": [
+          {
+            "name": "task_id",
+            "type": "string",
+            "required": true,
+            "description": "任务 ID"
+          }
+        ]
+      },
+      {
+        "key": "DELETE_TASK",
+        "description": "删除指定任务",
+        "params": [
+          {
+            "name": "task_id",
+            "type": "string",
+            "required": true,
+            "description": "任务 ID"
+          }
+        ]
+      },
+      {
+        "key": "REGISTER",
+        "description": "自动注册新账号并填充凭证（仅在创建账号时使用）",
+        "params": [
+          {
+            "name": "display_name",
+            "type": "string",
+            "required": false,
+            "description": "显示名称"
+          }
+        ]
+      },
+      {
+        "key": "AGENT_MONITOR",
+        "description": "Agent 模式：定期采集任务统计并上报异常"
+      }
+    ]
+  },
+  "settings": [
+    {
+      "key": "default_page_size",
+      "label": "默认分页大小",
+      "type": "string",
+      "secret": false,
+      "default": "20",
+      "description": "列表查询时每页返回的条目数 (1–50)",
+      "required": false
+    },
+    {
+      "key": "debug_mode",
+      "label": "调试模式",
+      "type": "string",
+      "secret": false,
+      "default": "false",
+      "description": "设为 true 时输出更详细的日志",
+      "required": false
+    },
+    {
+      "key": "agent_loop_hint",
+      "label": "Agent 循环提示 (秒)",
+      "type": "string",
+      "secret": false,
+      "default": "60",
+      "description": "仅用于文档说明；实际间隔由 Worker 的 WORKER_AGENT_LOOP_INTERVAL 控制",
+      "required": false
+    }
+  ],
+  "ui": {
+    "tabs": [
+      {
+        "key": "overview",
+        "label": "概览",
+        "sections": [
+          {
+            "title": "账号操作",
+            "fields": [],
+            "buttons": [
+              {
+                "action": "VERIFY",
+                "label": "验证账号",
+                "variant": "outline",
+                "mode": "sync",
+                "params": {},
+                "form": []
+              },
+              {
+                "action": "GET_PROFILE",
+                "label": "获取并同步资料",
+                "variant": "outline",
+                "mode": "sync",
+                "params": {},
+                "form": []
+              }
+            ]
+          }
+        ],
+        "context": ""
+      },
+      {
+        "key": "tasks",
+        "label": "任务",
+        "sections": [
+          {
+            "title": "查询任务",
+            "fields": [],
+            "buttons": [
+              {
+                "action": "LIST_TASKS",
+                "label": "查询任务列表",
+                "variant": "outline",
+                "mode": "sync",
+                "params": {},
+                "form": [
+                  {
+                    "name": "status",
+                    "type": "string",
+                    "required": false,
+                    "choices": [
+                      "",
+                      "pending",
+                      "in_progress",
+                      "completed",
+                      "cancelled"
+                    ],
+                    "description": "按状态过滤（留空=全部）"
+                  },
+                  {
+                    "name": "priority",
+                    "type": "string",
+                    "required": false,
+                    "choices": [
+                      "",
+                      "low",
+                      "medium",
+                      "high",
+                      "critical"
+                    ],
+                    "description": "按优先级过滤（留空=全部）"
+                  },
+                  {
+                    "name": "page",
+                    "type": "string",
+                    "default": "1",
+                    "required": false,
+                    "description": "页码"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "title": "新建任务",
+            "fields": [],
+            "buttons": [
+              {
+                "action": "CREATE_TASK",
+                "label": "创建任务",
+                "variant": "outline",
+                "mode": "job",
+                "params": {},
+                "form": [
+                  {
+                    "name": "title",
+                    "type": "string",
+                    "required": true,
+                    "description": "任务标题"
+                  },
+                  {
+                    "name": "priority",
+                    "type": "string",
+                    "default": "medium",
+                    "required": false,
+                    "choices": [
+                      "low",
+                      "medium",
+                      "high",
+                      "critical"
+                    ],
+                    "description": "优先级"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "title": "操作任务",
+            "fields": [],
+            "buttons": [
+              {
+                "action": "COMPLETE_TASK",
+                "label": "标记为完成",
+                "variant": "outline",
+                "mode": "sync",
+                "params": {},
+                "form": [
+                  {
+                    "name": "task_id",
+                    "type": "string",
+                    "required": true,
+                    "description": "任务 ID（从查询结果中复制）"
+                  }
+                ]
+              },
+              {
+                "action": "DELETE_TASK",
+                "label": "删除任务",
+                "variant": "outline",
+                "mode": "sync",
+                "params": {},
+                "form": [
+                  {
+                    "name": "task_id",
+                    "type": "string",
+                    "required": true,
+                    "description": "任务 ID"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "context": ""
+      },
+      {
+        "key": "register",
+        "label": "注册",
+        "sections": [
+          {
+            "title": "自动注册新账号",
+            "fields": [],
+            "buttons": [
+              {
+                "action": "REGISTER",
+                "label": "自动注册",
+                "variant": "outline",
+                "mode": "sync",
+                "params": {},
+                "form": [
+                  {
+                    "name": "display_name",
+                    "type": "string",
+                    "required": false,
+                    "description": "显示名称（可选，不填则使用用户名）"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "context": "create"
+      }
+    ],
+    "list_actions": [
+      {
+        "action": "VERIFY",
+        "label": "验证",
+        "variant": "outline",
+        "mode": "sync",
+        "params": {},
+        "form": []
+      }
+    ]
+  },
+  "script_config": {}
+}

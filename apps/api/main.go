@@ -44,7 +44,7 @@ func main() {
 	v2 := h.Group("/api/v2")
 
 	// System: /healthz on root, /api/v2/system/* and /api/v2/config/* on v2
-	systemtransport.NewHandler(application.System).Register(root, v2)
+	systemtransport.NewHandler(application.Config.Auth.AdminKey, application.System).Register(root, v2)
 
 	// Public domain routes (no blanket auth — each handler applies guard per-route)
 	plugintransport.NewHandler(application.Config.Auth.AdminKey, application.Plugins, application.AccountTypes, application.System).Register(v2)

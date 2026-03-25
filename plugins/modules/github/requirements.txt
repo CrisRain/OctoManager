@@ -1,4 +1,0 @@
-# Required for browser mode (mode="browser") only.
-# API mode (default) does not need Playwright.
-# After installing, also run: python -m playwright install chromium
-playwright>=1.44.0

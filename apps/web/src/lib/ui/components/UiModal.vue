@@ -56,7 +56,7 @@ function onBackdropClick(event: MouseEvent) {
         v-if="visible"
         v-bind="{ ...attrs, class: undefined }"
         :class="cx('ui-modal fixed inset-0 z-modal flex items-center justify-center p-4', attrs.class as string)"
-        style="background: rgba(15, 23, 42, 0.34); backdrop-filter: blur(10px) saturate(150%); -webkit-backdrop-filter: blur(10px) saturate(150%)"
+        style="background: var(--modal-overlay); backdrop-filter: blur(10px) saturate(150%); -webkit-backdrop-filter: blur(10px) saturate(150%)"
         @click="onBackdropClick"
       >
         <Transition name="modal-panel" appear>
@@ -68,7 +68,7 @@ function onBackdropClick(event: MouseEvent) {
             <header
               v-if="hasTitle"
               class="ui-modal-header flex items-center justify-between border-b px-6 py-4"
-              style="border-color: rgba(255, 255, 255, 0.72); background: linear-gradient(180deg, rgba(255,255,255,0.52), rgba(247,250,255,0.18));"
+              style="border-color: var(--surface-panel); background: var(--modal-header-bg);"
             >
               <h3 class="font-display text-[1.05em] font-semibold tracking-[-0.03em] text-slate-900">
                 <slot name="title">{{ title }}</slot>
@@ -77,7 +77,7 @@ function onBackdropClick(event: MouseEvent) {
                 v-if="closable"
                 type="button"
                 class="flex items-center justify-center rounded-full border text-slate-400 transition-all hover:text-slate-700"
-                style="inline-size: 2.1em; block-size: 2.1em; border-color: rgba(255,255,255,0.82); background: rgba(255,255,255,0.58);"
+                style="inline-size: 2.1em; block-size: 2.1em; border-color: var(--modal-close-btn-border); background: var(--modal-close-btn-bg);"
                 @click="close"
               >
                 <svg class="h-[1em] w-[1em]" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
@@ -91,7 +91,7 @@ function onBackdropClick(event: MouseEvent) {
             <footer
               v-if="footer !== false"
               class="ui-modal-footer flex items-center justify-end gap-3 border-t px-6 py-4"
-              style="border-color: rgba(255,255,255,0.72); background: linear-gradient(180deg, rgba(247,250,255,0.12), rgba(255,255,255,0.5));"
+              style="border-color: var(--surface-panel); background: var(--modal-footer-bg);"
             >
               <slot name="footer">
                 <UiButton @click="close">{{ cancelText }}</UiButton>

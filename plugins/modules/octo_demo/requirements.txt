@@ -1,0 +1,3 @@
+# octo_demo 插件依赖
+# gRPC 模式需要 grpcio；其余业务逻辑仍只依赖 Python 标准库 + OctoManger SDK。
+grpcio>=1.60,<2

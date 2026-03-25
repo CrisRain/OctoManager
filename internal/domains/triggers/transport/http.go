@@ -31,9 +31,29 @@ func (h Handler) Register(v2 *route.RouterGroup, root *route.RouterGroup) {
 	guard := auth.RequireAdmin(h.adminKey)
 	v2.GET("/triggers", h.list)
 	v2.POST("/triggers", guard, h.create)
+	v2.GET("/triggers/:id", h.get)
+	v2.PATCH("/triggers/:id", guard, h.patch)
 	v2.DELETE("/triggers/:id", guard, h.delete)
 	v2.POST("/triggers/:id/fire", guard, h.fireByID)
 	root.POST("/api/v2/webhooks/:key", h.fireByKey) // no auth guard — token in header
+}
+
+func (h Handler) get(ctx context.Context, c *app.RequestContext) {
+	id, err := httpx.PathInt64(c, "id")
+	if err != nil {
+		httpx.BadRequest(ctx, c, "invalid trigger id")
+		return
+	}
+	item, err := h.service.Get(ctx, id)
+	if err != nil {
+		if errors.Is(err, triggerpostgres.ErrNotFound) {
+			httpx.NotFound(ctx, c, "trigger not found")
+			return
+		}
+		httpx.InternalServerError(ctx, c, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, item)
 }
 
 func (h Handler) list(ctx context.Context, c *app.RequestContext) {
@@ -57,6 +77,29 @@ func (h Handler) create(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 	c.JSON(http.StatusCreated, result)
+}
+
+func (h Handler) patch(ctx context.Context, c *app.RequestContext) {
+	id, err := httpx.PathInt64(c, "id")
+	if err != nil {
+		httpx.BadRequest(ctx, c, "invalid trigger id")
+		return
+	}
+	var input triggerdomain.PatchTriggerInput
+	if err := httpx.DecodeJSON(c, &input); err != nil {
+		httpx.BadRequest(ctx, c, err.Error())
+		return
+	}
+	item, err := h.service.Patch(ctx, id, input)
+	if err != nil {
+		if errors.Is(err, triggerpostgres.ErrNotFound) {
+			httpx.NotFound(ctx, c, "trigger not found")
+			return
+		}
+		httpx.InternalServerError(ctx, c, err.Error())
+		return
+	}
+	c.JSON(http.StatusOK, item)
 }
 
 func (h Handler) delete(ctx context.Context, c *app.RequestContext) {

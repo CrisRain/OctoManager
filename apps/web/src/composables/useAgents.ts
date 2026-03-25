@@ -1,14 +1,12 @@
-import { ref, computed, unref, type Ref } from "vue";
+import { ref, computed, onMounted, unref, type Ref } from "vue";
 import { storeToRefs } from "pinia";
 import { getAgentEventsUrl } from "@/api";
 import { useAgentsStore } from "@/store";
 import type { AgentStatus } from "@/types";
-import { useAutoRefresh, type UseAutoRefreshOptions } from "./useAutoRefresh";
+import { useAsyncAction } from "./useAsyncAction";
 import { useEventStream } from "./useEventStream";
 
-interface AgentCollectionRefreshOptions extends UseAutoRefreshOptions {}
-
-export function useAgents(options: AgentCollectionRefreshOptions = {}) {
+export function useAgents() {
   const store = useAgentsStore();
   const { agents, loading, error } = storeToRefs(store);
 
@@ -16,17 +14,12 @@ export function useAgents(options: AgentCollectionRefreshOptions = {}) {
     await store.fetchAgents();
   }
 
-  const autoRefresh = useAutoRefresh(refresh, {
-    intervalMs: 10000,
-    ...options,
-  });
+  onMounted(() => { void refresh(); });
 
-  return { data: agents, loading, error, refresh: autoRefresh.refresh };
+  return { data: agents, loading, error, refresh };
 }
 
-interface SingleAgentRefreshOptions extends UseAutoRefreshOptions {}
-
-export function useAgent(id: number, options: SingleAgentRefreshOptions = {}) {
+export function useAgent(id: number) {
   const store = useAgentsStore();
   const { agents, loading, error } = storeToRefs(store);
   const data = computed(() => agents.value.find((a) => a.id === id) ?? null);
@@ -35,76 +28,36 @@ export function useAgent(id: number, options: SingleAgentRefreshOptions = {}) {
     await store.fetchAgents();
   }
 
-  const autoRefresh = useAutoRefresh(refresh, {
-    intervalMs: null,
-    ...options,
-  });
+  onMounted(() => { void refresh(); });
 
-  return { data, loading, error, refresh: autoRefresh.refresh };
+  return { data, loading, error, refresh };
 }
 
 export function useCreateAgent() {
-  const loading = ref(false);
-  const error = ref<string | null>(null);
   const store = useAgentsStore();
+  return useAsyncAction((payload: Parameters<typeof store.create>[0]) => store.create(payload));
+}
 
-  async function execute(payload: Parameters<typeof store.create>[0]) {
-    loading.value = true;
-    error.value = null;
-    try {
-      const result = await store.create(payload);
-      return result;
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : "请求失败";
-      throw e;
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  return { loading, error, execute };
+export function usePatchAgent() {
+  const store = useAgentsStore();
+  return useAsyncAction((id: number, payload: Parameters<typeof store.update>[1]) =>
+    store.update(id, payload),
+  );
 }
 
 export function useStartAgent() {
-  const loading = ref(false);
-  const error = ref<string | null>(null);
   const store = useAgentsStore();
+  return useAsyncAction((id: number) => store.start(id));
+}
 
-  async function execute(id: number) {
-    loading.value = true;
-    error.value = null;
-    try {
-      await store.start(id);
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : "请求失败";
-      throw e;
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  return { loading, error, execute };
+export function useDeleteAgent() {
+  const store = useAgentsStore();
+  return useAsyncAction((id: number) => store.remove(id));
 }
 
 export function useStopAgent() {
-  const loading = ref(false);
-  const error = ref<string | null>(null);
   const store = useAgentsStore();
-
-  async function execute(id: number) {
-    loading.value = true;
-    error.value = null;
-    try {
-      await store.stop(id);
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : "请求失败";
-      throw e;
-    } finally {
-      loading.value = false;
-    }
-  }
-
-  return { loading, error, execute };
+  return useAsyncAction((id: number) => store.stop(id));
 }
 
 // ── useAgentStatus ────────────────────────────────────────────────────────────
@@ -122,11 +75,9 @@ export function useAgentStatus(agentId: number) {
     }
   }
 
-  const autoRefresh = useAutoRefresh(refresh, {
-    intervalMs: 30000,
-  });
+  onMounted(() => { void refresh(); });
 
-  return { data, error, refresh: autoRefresh.refresh };
+  return { data, error, refresh };
 }
 
 export interface AgentStreamState {

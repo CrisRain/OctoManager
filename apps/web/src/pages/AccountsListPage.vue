@@ -6,7 +6,7 @@
 import { IconUser, IconCheck, IconSync, IconStop, IconPlayArrow } from "@/lib/icons";
 
 import { useAccountTypes } from "@/composables/useAccountTypes";
-import { useAccounts } from "@/composables/useAccounts";
+import { useAccounts, usePatchAccount, useDeleteAccount } from "@/composables/useAccounts";
 import { useMessage, useConfirm, useErrorHandler } from "@/composables";
 import { to } from "@/router/registry";
 
@@ -19,6 +19,8 @@ const { withErrorHandler } = useErrorHandler();
 // 数据加载
 const { data: types, loading: loadingTypes } = useAccountTypes();
 const { data: accounts, loading: loadingAccounts, error: accountsError, refresh } = useAccounts();
+const patchAccount = usePatchAccount();
+const deleteAccountOp = useDeleteAccount();
 
 // 类型筛选
 const typeKey = computed(() => route.params.typeKey as string | undefined);
@@ -128,7 +130,7 @@ async function toggleAccountStatus(account: any) {
 
   await withErrorHandler(
     async () => {
-      // TODO: 调用API切换状态
+      await patchAccount.execute(account.id, { status: newStatus });
       message.successAction(action);
       await refresh();
     },
@@ -143,7 +145,7 @@ async function deleteAccount(account: any) {
 
   await withErrorHandler(
     async () => {
-      // TODO: 调用API删除
+      await deleteAccountOp.execute(account.id);
       message.success(`已删除账号: ${account.identifier}`);
       await refresh();
     },
@@ -168,7 +170,7 @@ async function handleBatchDelete(items: any[]) {
 
   await withErrorHandler(
     async () => {
-      // TODO: 调用批量删除API
+      await Promise.all(items.map((item) => deleteAccountOp.execute(item.id)));
       message.success(`已删除 ${items.length} 个账号`);
       await refresh();
     },
@@ -190,14 +192,15 @@ async function handleBatchExport(items: any[]) {
 }
 
 // 批量启用/停用
-async function handleBatchToggle(enable: boolean) {
+async function handleBatchToggle(selectedItems: any[], enable: boolean) {
   const action = enable ? "启用" : "停用";
-  const confirmed = await confirm.confirm(`确定要${action}选中的账号吗？`);
+  const confirmed = await confirm.confirm(`确定要${action}选中的 ${selectedItems.length} 个账号吗？`);
   if (!confirmed) return;
 
   await withErrorHandler(
     async () => {
-      // TODO: 调用API批量操作
+      const newStatus = enable ? "active" : "inactive";
+      await Promise.all(selectedItems.map((item) => patchAccount.execute(item.id, { status: newStatus })));
       message.successAction(`批量${action}`);
       await refresh();
     },
@@ -236,7 +239,7 @@ async function handleBatchToggle(enable: boolean) {
         <!-- 类型筛选 -->
         <div class="flex flex-wrap items-center gap-3">
           <span class="text-sm font-medium text-slate-600">类型：</span>
-          <div class="flex flex-wrap items-center gap-1.5">
+          <div class="flex flex-wrap items-center gap-2">
             <button type="button"
               class="filter-chip"
               :class="{ active: !typeKey }"
@@ -259,7 +262,7 @@ async function handleBatchToggle(enable: boolean) {
         <!-- 状态筛选 -->
         <div class="flex flex-wrap items-center gap-3 mt-3">
           <span class="text-sm font-medium text-slate-600">状态：</span>
-          <div class="flex flex-wrap items-center gap-1.5">
+          <div class="flex flex-wrap items-center gap-2">
             <button type="button"
               v-for="option in statusOptions"
               :key="option.value"
@@ -379,6 +382,7 @@ async function handleBatchToggle(enable: boolean) {
       <ui-card
         v-for="record in filteredAccounts"
         :key="record.id"
+        v-memo="[record.id, record.identifier, record.status, record.account_type_key, record.account_type_id, record.tags?.length]"
         class="rounded-xl border p-5 border-slate-200 bg-white shadow-sm"
       >
         <div class="mb-3 flex items-center gap-3">
@@ -442,7 +446,7 @@ async function handleBatchToggle(enable: boolean) {
 
       <ui-card
         v-if="!loadingAccounts && !loadingTypes && !filteredAccounts.length"
-        class="rounded-xl border border-slate-200 bg-white shadow-sm px-5 py-8"
+        class="col-span-full empty-state-block"
       >
         <ui-empty
           :description="accountsError ? `加载失败: ${accountsError}` : (typeKey ? `暂无 [${typeKey}] 类型的账号` : '暂无账号')"
